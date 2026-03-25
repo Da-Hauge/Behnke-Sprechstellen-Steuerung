@@ -1,5 +1,3 @@
-// script.js - Behnke Master-Steuerung (Pro-Station PW & Simulation)
-
 const STATIONS = {
     "192.168.104.191": "Altbau 191",
     "192.168.104.192": "Altbau 192",
@@ -40,22 +38,21 @@ function loadStation(ip) {
     currentIP = ip;
     dom.content.style.visibility = 'visible';
     
-    // Passwort laden (spezifisch für IP)
     const saved = localStorage.getItem(`behnke_pwd_${ip}`);
     dom.pwdInput.value = saved || "";
     
     dom.permanentToggle.checked = false;
-    updateSystemStatus(saved ? "Bereit" : "Bitte Passwort eingeben");
+    updateSystemStatus(saved ? "Bereit" : "Passwort fehlt");
     updateRelayStatus("Unbekannt");
     
-    showToast(`${STATIONS[ip]} ausgewählt`);
+    showToast(`${STATIONS[ip]} geladen`);
     if(saved) startSSE();
 }
 
 function savePassword() {
     if(!currentIP) return;
     localStorage.setItem(`behnke_pwd_${currentIP}`, dom.pwdInput.value);
-    showToast("Passwort für diese IP gespeichert", "success");
+    showToast("Passwort gespeichert", "success");
     updateSystemStatus("Bereit");
     startSSE();
 }
@@ -64,34 +61,32 @@ async function runTrigger() {
     if (dom.triggerBtn.disabled) return;
     const ok = await apiCall('api=trigger&relay=1');
     if (ok) {
-        showToast("Tür öffnet (5s)", "success");
+        showToast("Impuls gesendet", "success");
         visualizeCountdown();
     }
 }
 
 function visualizeCountdown() {
     dom.triggerBtn.disabled = true;
-    dom.triggerBtn.classList.add('btn-active');
-    dom.triggerText.textContent = "Geöffnet...";
+    dom.triggerBtn.classList.add('active');
+    dom.triggerText.textContent = "Aktiv";
     dom.progressBar.style.width = "100%";
     
-    // Kleiner Delay damit CSS Transition greift
     setTimeout(() => dom.progressBar.style.width = "0%", 50);
-    
     setTimeout(() => {
         dom.triggerBtn.disabled = false;
-        dom.triggerBtn.classList.remove('btn-active');
-        dom.triggerText.textContent = "Temporär öffnen";
+        dom.triggerBtn.classList.remove('active');
+        dom.triggerText.textContent = "Öffnen";
     }, 5000);
 }
 
 function togglePermanent() {
     if (dom.permanentToggle.checked) {
         startAutoTrigger();
-        showToast("Daueröffnung aktiviert", "warning");
+        showToast("Daueröffnung EIN", "warning");
     } else {
         stopAutoTrigger();
-        showToast("Daueröffnung beendet");
+        showToast("Daueröffnung AUS");
     }
 }
 
@@ -111,28 +106,19 @@ function stopAutoTrigger() {
 
 async function apiCall(cmd) {
     const pwd = dom.pwdInput.value;
-    if (!pwd) { 
-        showToast("Passwort erforderlich!", "error"); 
-        updateSystemStatus("Passwort fehlt!");
-        return false; 
-    }
-    
+    if (!pwd) return false;
     try {
         await fetch(`https://${currentIP}/?key=${encodeURIComponent(pwd)}&${cmd}&cors`, { mode: 'no-cors' });
         return true;
-    } catch (e) {
-        showToast("Verbindungsfehler", "error");
-        return false;
-    }
+    } catch (e) { return false; }
 }
 
 function startSSE() {
     const pwd = dom.pwdInput.value;
     if (sseConnection) sseConnection.close();
-    
     updateSystemStatus("Verbinde...");
+    
     sseConnection = new EventSource(`https://${currentIP}:8443/?key=${encodeURIComponent(pwd)}&sse&all&cors`);
-
     sseConnection.onopen = () => updateSystemStatus("Verbunden");
     sseConnection.onmessage = (e) => {
         const d = e.data.toUpperCase();
@@ -142,11 +128,10 @@ function startSSE() {
             updateRelayStatus("Geschlossen");
         }
     };
-    sseConnection.onerror = () => updateSystemStatus("Offline / CORS Error");
+    sseConnection.onerror = () => updateSystemStatus("Offline");
 }
 
 function updateSystemStatus(txt) { dom.systemStatus.textContent = txt; }
-
 function updateRelayStatus(val) {
     dom.relayStatus.textContent = val;
     dom.relayStatus.className = `status-value relay-${val.toLowerCase()}`;
@@ -164,7 +149,6 @@ function rotateTheme() {
     const isDark = document.body.classList.toggle('dark-mode');
     localStorage.setItem('behnke_theme', isDark ? 'dark' : 'light');
 }
-
 function initTheme() {
     if (localStorage.getItem('behnke_theme') === 'dark') document.body.classList.add('dark-mode');
 }

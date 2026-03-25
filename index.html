@@ -23,39 +23,37 @@
             </div>
         </div>
         <div class="header-right">
-            <button id="themeToggle" class="icon-btn" aria-label="Theme wechseln">
-                <span class="material-icons">brightness_medium</span>
-            </button>
+            <button id="themeToggle" class="icon-btn"><span class="material-icons">brightness_medium</span></button>
         </div>
     </header>
 
     <main class="container" id="mainContent" style="visibility: hidden;">
-        <div class="status-grid">
-            <div class="status-card">
-                <label>Systemstatus</label>
-                <div id="systemStatus" class="status-value">Bereit</div>
-            </div>
-            <div class="status-card">
+        
+        <div class="tile system-tile">
+            <label>Systemstatus</label>
+            <div id="systemStatus" class="status-value">Bereit</div>
+        </div>
+
+        <div class="tile relay-tile">
+            <div class="tile-header">
                 <label>Relais 1</label>
                 <div id="relayStatus" class="status-value relay-unbekannt">Unbekannt</div>
             </div>
-        </div>
+            
+            <div class="control-rows">
+                <div class="control-row">
+                    <div class="control-info">
+                        <strong>Temporär öffnen</strong>
+                        <p>Impuls für 5 Sekunden</p>
+                    </div>
+                    <button id="triggerBtn" class="btn-trigger">
+                        <span id="triggerText">Öffnen</span>
+                        <div id="progress" class="btn-progress"></div>
+                    </button>
+                </div>
 
-        <div class="control-card">
-            <div class="input-section">
-                <label for="stationPwd">Administrator-Passwort</label>
-                <input type="password" id="stationPwd" placeholder="Passwort für diese IP">
-            </div>
-
-            <div class="action-section">
-                <button id="triggerBtn" class="btn-trigger">
-                    <span class="material-icons">timer</span>
-                    <span id="triggerText">Temporär öffnen</span>
-                    <div id="progress" class="btn-progress"></div>
-                </button>
-
-                <div class="permanent-box">
-                    <div class="perm-text">
+                <div class="control-row">
+                    <div class="control-info">
                         <strong>Dauerhaft öffnen</strong>
                         <p>Simulation durch Auto-Trigger</p>
                     </div>
@@ -66,6 +64,15 @@
                 </div>
             </div>
         </div>
+
+        <div class="tile password-tile">
+            <label for="stationPwd">Sicherheits-Einstellungen</label>
+            <div class="input-wrapper">
+                <span class="material-icons">lock</span>
+                <input type="password" id="stationPwd" placeholder="Administrator-Passwort">
+            </div>
+        </div>
+
     </main>
 
     <div id="toastContainer" class="toast-container"></div>
