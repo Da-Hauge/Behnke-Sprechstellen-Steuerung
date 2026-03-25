@@ -11,7 +11,7 @@
 
     <header class="main-header">
         <div class="header-left">
-            <span class="material-icons info-icon">router</span>
+            <span class="material-icons info-icon">admin_panel_settings</span>
             <div class="station-selector-wrapper">
                 <small>Sprechstelle</small>
                 <select id="stationSwitcher" class="header-dropdown">
@@ -29,12 +29,14 @@
 
     <main class="container" id="mainContent" style="visibility: hidden;">
         
-        <div class="tile system-tile">
-            <label>Systemstatus</label>
-            <div id="systemStatus" class="status-value">Bereit</div>
+        <div class="tile tile-full">
+            <div class="tile-header">
+                <label>Systemstatus</label>
+                <div id="systemStatus" class="status-value">Bereit</div>
+            </div>
         </div>
 
-        <div class="tile relay-tile">
+        <div class="tile tile-full">
             <div class="tile-header">
                 <label>Relais 1</label>
                 <div id="relayStatus" class="status-value relay-unbekannt">Unbekannt</div>
@@ -42,10 +44,7 @@
             
             <div class="control-rows">
                 <div class="control-row">
-                    <div class="control-info">
-                        <strong>Temporär öffnen</strong>
-                        <p>Impuls für 5 Sekunden</p>
-                    </div>
+                    <span>Temporär öffnen (5s)</span>
                     <button id="triggerBtn" class="btn-trigger">
                         <span id="triggerText">Öffnen</span>
                         <div id="progress" class="btn-progress"></div>
@@ -53,10 +52,7 @@
                 </div>
 
                 <div class="control-row">
-                    <div class="control-info">
-                        <strong>Dauerhaft öffnen</strong>
-                        <p>Simulation durch Auto-Trigger</p>
-                    </div>
+                    <span>Dauerhaft öffnen</span>
                     <label class="switch">
                         <input type="checkbox" id="permanentToggle">
                         <span class="slider"></span>
@@ -65,10 +61,10 @@
             </div>
         </div>
 
-        <div class="tile password-tile">
-            <label for="stationPwd">Sicherheits-Einstellungen</label>
+        <div class="tile tile-full">
+            <label>Sicherheits-Einstellungen</label>
             <div class="input-wrapper">
-                <span class="material-icons">lock</span>
+                <span class="material-icons">vpn_key</span>
                 <input type="password" id="stationPwd" placeholder="Administrator-Passwort">
             </div>
         </div>

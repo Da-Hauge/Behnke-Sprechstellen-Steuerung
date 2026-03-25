@@ -42,10 +42,10 @@ function loadStation(ip) {
     dom.pwdInput.value = saved || "";
     
     dom.permanentToggle.checked = false;
-    updateSystemStatus(saved ? "Bereit" : "Passwort fehlt");
+    updateSystemStatus(saved ? "Bereit" : "Passwort eingeben");
     updateRelayStatus("Unbekannt");
     
-    showToast(`${STATIONS[ip]} geladen`);
+    showToast(`${STATIONS[ip]} ausgewählt`);
     if(saved) startSSE();
 }
 
@@ -61,7 +61,7 @@ async function runTrigger() {
     if (dom.triggerBtn.disabled) return;
     const ok = await apiCall('api=trigger&relay=1');
     if (ok) {
-        showToast("Impuls gesendet", "success");
+        showToast("Öffnungs-Impuls gesendet", "success");
         visualizeCountdown();
     }
 }
@@ -83,17 +83,17 @@ function visualizeCountdown() {
 function togglePermanent() {
     if (dom.permanentToggle.checked) {
         startAutoTrigger();
-        showToast("Daueröffnung EIN", "warning");
+        showToast("Daueröffnung AKTIV", "warning");
     } else {
         stopAutoTrigger();
-        showToast("Daueröffnung AUS");
+        showToast("Daueröffnung DEAKTIVIERT");
     }
 }
 
 function startAutoTrigger() {
     apiCall('api=trigger&relay=1');
     autoTriggerInterval = setInterval(() => apiCall('api=trigger&relay=1'), 5000);
-    updateSystemStatus("Auto-Trigger aktiv");
+    updateSystemStatus("Auto-Trigger läuft...");
 }
 
 function stopAutoTrigger() {
@@ -108,6 +108,7 @@ async function apiCall(cmd) {
     const pwd = dom.pwdInput.value;
     if (!pwd) return false;
     try {
+        // Wir senden den Befehl "blind" (no-cors), da die Hardware oft nicht korrekt auf OPTIONS reagiert
         await fetch(`https://${currentIP}/?key=${encodeURIComponent(pwd)}&${cmd}&cors`, { mode: 'no-cors' });
         return true;
     } catch (e) { return false; }
@@ -116,22 +117,41 @@ async function apiCall(cmd) {
 function startSSE() {
     const pwd = dom.pwdInput.value;
     if (sseConnection) sseConnection.close();
+    
     updateSystemStatus("Verbinde...");
     
     sseConnection = new EventSource(`https://${currentIP}:8443/?key=${encodeURIComponent(pwd)}&sse&all&cors`);
-    sseConnection.onopen = () => updateSystemStatus("Verbunden");
+
+    sseConnection.onopen = () => {
+        updateSystemStatus("Verbunden (Live)");
+    };
+
     sseConnection.onmessage = (e) => {
-        const d = e.data.toUpperCase();
-        if (d.includes('OPEN') || d.includes('FREE') || d.includes('RELAY_CONTACT_1 1')) {
+        const data = e.data.trim().toUpperCase();
+        
+        // --- LOGIK FÜR DEINEN LOG-OUTPUT ---
+        // Erkennt: TEMP_RELAY_CONTACT_1 OPEN, TEMP_ACCESS_STATE_1 FREE, STATE_ACCESS
+        if (data.includes('OPEN') || data.includes('FREE') || data.includes('STATE_ACCESS')) {
             updateRelayStatus("Offen");
-        } else if (d.includes('CLOSED') || d.includes('RELAY_CONTACT_1 0')) {
-            updateRelayStatus("Geschlossen");
+        } 
+        // Erkennt: TEMP_RELAY_CONTACT_1 CLOSED, TEMP_ACCESS_STATE_1 CLOSED, STATE_RUN
+        else if (data.includes('CLOSED') || data.includes('STATE_RUN')) {
+            // Nur auf "Geschlossen" setzen, wenn wir nicht gerade im Auto-Trigger Modus sind
+            if (!autoTriggerInterval) {
+                updateRelayStatus("Geschlossen");
+            }
         }
     };
-    sseConnection.onerror = () => updateSystemStatus("Offline");
+
+    sseConnection.onerror = () => {
+        updateSystemStatus("Verbindung unterbrochen");
+        // Automatischer Reconnect nach 5 Sek
+        setTimeout(startSSE, 5000);
+    };
 }
 
 function updateSystemStatus(txt) { dom.systemStatus.textContent = txt; }
+
 function updateRelayStatus(val) {
     dom.relayStatus.textContent = val;
     dom.relayStatus.className = `status-value relay-${val.toLowerCase()}`;
@@ -149,6 +169,7 @@ function rotateTheme() {
     const isDark = document.body.classList.toggle('dark-mode');
     localStorage.setItem('behnke_theme', isDark ? 'dark' : 'light');
 }
+
 function initTheme() {
     if (localStorage.getItem('behnke_theme') === 'dark') document.body.classList.add('dark-mode');
 }

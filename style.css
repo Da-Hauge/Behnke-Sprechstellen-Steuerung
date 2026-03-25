@@ -1,67 +1,70 @@
 :root {
-    --bg: #f8f9fa; --card: #ffffff; --text: #212529; --primary: #007bff;
-    --border: #dee2e6; --success: #28a745; --danger: #dc3545; --warning: #ffc107;
+    --bg: #f2f4f7; --card: #ffffff; --text: #1a1c1e; --primary: #0061ff;
+    --border: #e1e4e8; --success: #2ecc71; --danger: #e74c3c; --warning: #f1c40f;
 }
 .dark-mode {
-    --bg: #121212; --card: #1e1e1e; --text: #f8f9fa; --border: #333;
+    --bg: #0f0f10; --card: #1c1c1e; --text: #f5f5f7; --border: #2c2c2e;
 }
 
-body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); margin: 0; transition: 0.3s; }
+body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg); color: var(--text); margin: 0; transition: 0.3s; }
 
 /* Header */
 .main-header {
     height: 70px; background: var(--card); display: flex; align-items: center; justify-content: space-between;
-    padding: 0 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); position: fixed; top: 0; width: 100%; box-sizing: border-box; z-index: 1000;
+    padding: 0 20px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); position: fixed; top: 0; width: 100%; box-sizing: border-box; z-index: 1000;
 }
 .header-left { display: flex; align-items: center; gap: 12px; }
-.info-icon { color: var(--primary); font-size: 30px; }
+.info-icon { color: var(--primary); font-size: 28px; }
 .header-dropdown { background: none; border: none; font-size: 16px; font-weight: 700; color: var(--text); cursor: pointer; outline: none; }
 
-/* Layout & Tiles */
+/* Layout */
 .container { max-width: 500px; margin: 90px auto 40px; padding: 0 15px; display: flex; flex-direction: column; gap: 15px; }
 
-.tile { background: var(--card); border-radius: 12px; padding: 20px; border: 1px solid var(--border); box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
-.tile label { font-size: 11px; text-transform: uppercase; font-weight: 800; opacity: 0.5; display: block; margin-bottom: 10px; }
+.tile { background: var(--card); border-radius: 16px; padding: 20px; border: 1px solid var(--border); box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
+.tile label { font-size: 10px; text-transform: uppercase; font-weight: 800; opacity: 0.5; display: block; margin-bottom: 12px; letter-spacing: 0.5px; }
 
-/* System Status Tile */
-.system-tile { text-align: center; }
+/* Header innerhalb eines Tiles */
+.tile-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+.tile-header label { margin-bottom: 0; }
 
-/* Relay Tile */
-.tile-header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 15px; border-bottom: 1px solid var(--border); margin-bottom: 15px; }
 .status-value { font-size: 18px; font-weight: 700; }
 .relay-offen { color: var(--success); }
 .relay-geschlossen { color: var(--danger); }
+.relay-unbekannt { color: var(--warning); }
 
-/* Control Rows */
-.control-rows { display: flex; flex-direction: column; gap: 15px; }
-.control-row { display: flex; justify-content: space-between; align-items: center; background: var(--bg); padding: 12px; border-radius: 10px; }
-.control-info strong { display: block; font-size: 14px; }
-.control-info p { margin: 2px 0 0; font-size: 11px; opacity: 0.6; }
+/* Steuerungszeilen (identisches Design) */
+.control-rows { display: flex; flex-direction: column; gap: 10px; border-top: 1px solid var(--border); padding-top: 15px; }
+.control-row { 
+    display: flex; justify-content: space-between; align-items: center; 
+    background: var(--bg); padding: 12px 16px; border-radius: 12px; height: 45px;
+}
+.control-row span { font-weight: 600; font-size: 14px; }
 
-/* Trigger Button */
+/* Button & Switch */
 .btn-trigger {
-    width: 90px; height: 40px; border: none; border-radius: 8px; background: var(--primary);
-    color: white; font-weight: bold; cursor: pointer; position: relative; overflow: hidden;
+    width: 80px; height: 36px; border: none; border-radius: 8px; background: var(--primary);
+    color: white; font-weight: 700; cursor: pointer; position: relative; overflow: hidden; font-size: 13px;
 }
 .btn-trigger.active { background: var(--success); }
-.btn-progress { position: absolute; bottom: 0; left: 0; height: 4px; background: rgba(255,255,255,0.4); width: 0%; transition: width 5s linear; }
+.btn-progress { position: absolute; bottom: 0; left: 0; height: 3px; background: rgba(255,255,255,0.5); width: 0%; transition: width 5s linear; }
 
-/* Lever / Switch */
 .switch { position: relative; width: 50px; height: 26px; }
 .switch input { opacity: 0; width: 0; height: 0; }
-.slider { position: absolute; cursor: pointer; top:0; left:0; right:0; bottom:0; background: #ccc; transition: .3s; border-radius: 30px; }
+.slider { position: absolute; cursor: pointer; top:0; left:0; right:0; bottom:0; background: #bdc3c7; transition: .3s; border-radius: 30px; }
 .slider:before { position: absolute; content: ""; height: 20px; width: 20px; left: 3px; bottom: 3px; background: white; transition: .3s; border-radius: 50%; }
 input:checked + .slider { background: var(--warning); }
 input:checked + .slider:before { transform: translateX(24px); }
 
-/* Password Tile */
-.input-wrapper { display: flex; align-items: center; gap: 10px; background: var(--bg); padding: 5px 12px; border-radius: 8px; border: 1px solid var(--border); }
-.input-wrapper input { border: none; background: none; padding: 10px 0; width: 100%; color: var(--text); outline: none; font-size: 16px; }
+/* Passwort Input */
+.input-wrapper { display: flex; align-items: center; gap: 12px; background: var(--bg); padding: 4px 14px; border-radius: 10px; border: 1px solid var(--border); }
+.input-wrapper input { border: none; background: none; padding: 10px 0; width: 100%; color: var(--text); outline: none; font-size: 15px; }
 
 /* Toasts */
-.toast-container { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 2000; }
-.toast { padding: 10px 20px; border-radius: 20px; background: #333; color: white; margin-top: 8px; animation: slideUp 0.3s; transition: 0.3s; font-size: 14px; }
+.toast-container { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); z-index: 2000; }
+.toast { padding: 12px 24px; border-radius: 30px; background: #2c3e50; color: white; margin-top: 8px; font-size: 13px; font-weight: 600; box-shadow: 0 4px 12px rgba(0,0,0,0.15); animation: slideIn 0.3s; }
 .toast-success { background: var(--success); }
-.toast-warning { background: var(--warning); color: black; }
+.toast-warning { background: var(--warning); color: #000; }
 
-@keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+@keyframes slideIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+.icon-btn { background: none; border: none; color: var(--text); cursor: pointer; padding: 8px; border-radius: 50%; display: flex; }
