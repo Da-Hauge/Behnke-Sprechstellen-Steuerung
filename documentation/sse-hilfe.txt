@@ -1,0 +1,37 @@
+[HILFE]
+allgemeine Verwendung: https://[IP-Adresse]:8443/?key=[Administrator-Password]&sse&[Parameter]
+oder für http: http://[IP-Adresse]:8080/?key=[Administrator-Password]&sse&[Parameter]
+
+Die [IP-Adresse] ist normalerweise die IP-Adresse der Behnke-Station, außer wenn im Bereich 'Netzwerk' ein VLAN für die Webcam konfiguriert wurde. Dann ist es die IP-Adresse der Webcam.
+
+Falls das Administrator-Passwort Sonderzeichen enthält, so müssen diese URL-kodiert werden.
+
+diese Hilfe anzeigen: &sse=hilfe
+
+SSE sendet zunächst eine Begrüßungsnachricht (SSE_WELCOME) mit Seriennummer des Gerätes. Abschließend werden Ereignisse gesendet, wie beispielsweise erkannte Tastendrücke, bzw. wenn keine Ereignisse vorliegen Keep-Alives (SSE_KEEP_ALIVE). Wird die Verbindung vom Gerät aus beendet, wird vorher noch eine Endenachticht (SSE_BYE) gesendet.
+
+Bei zu vielen gleichzeitigen SSE-Verbindungen wird nach dem SSE_WELCOME die Nachricht SSE_TOO_MANY_CONNECTIONS gesendet und die Verbindung beendet.
+
+SSE abrufen: &sse
+SSE im Browser abrufen: &sse&html
+SSE ohne Keep-Alive-Nachrichten: &sse&no_keep_alive
+SSE mit Zugriff für alle Origins: &cors
+SSE als eventsource: &eventsource
+
+erkannte Tastendrücke abrufen: &sse&key
+erkannte DTMF-Töne abrufen: &sse&dtmf
+geänderte TEMP-Optionen abrufen: &sse&temp
+Zustandsänderungen der Applikation abrufen: &sse&state
+bestimmten erkannten Tastendruck abrufen: &sse&[Taste]
+bestimmten erkannten DTMF-Ton abrufen: &sse&[DTMF-Ton]
+bestimmte geänderte TEMP-Variable abrufen: &sse&[TEMP-OPTION]
+alle Ereignisse abrufen: &sse&all
+
+Die einzelnen Ereignisse/Zeilen werden durch LF (ASCII-Code 10) getrennt.
+Sollen die Zeilen statt durch LF durch CR (ASCII-Code 13) oder CR LF getrennt werden, so kann das erreicht werden, in dem man den Parameter &cr oder &crlf zur Anfrage hinzufügt.
+
+Beispiele (für IP-Adresse 192.168.16.200 und Administrator-Passwort admin)
+erkannten Tastendruck von Ruftaste 1 abrufen: https://192.168.16.200:8443/?key=admin&sse&key_button_1
+Zustandsänderungen der Applikation abrufen: https://192.168.16.200:8443/?key=admin&sse&state
+Zustandsänderungen des Zugangs 1 abrufen: https://192.168.16.200:8443/?key=admin&sse&access_state_1
+Zustandsänderungen der Relaiskontakte abrufen: https://192.168.16.200:8443/?key=admin&sse&relay_contact_1&relay_contact_2

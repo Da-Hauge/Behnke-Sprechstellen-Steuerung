@@ -44,9 +44,9 @@
     </div>
 
     <div class="btn-group">
-        <button class="btn-temp" onclick="sendCommand('cmd:free1')">Temporär Auf</button>
-        <button class="btn-open" onclick="sendCommand('cmd:open1')">Dauerhaft Auf</button>
-        <button class="btn-close" onclick="sendCommand('cmd:close1')">Dauerhaft Zu</button>
+        <button class="btn-temp" onclick="sendCommand('temp_auf')">Temporär Auf</button>
+        <button class="btn-open" onclick="sendCommand('dauer_auf')">Dauerhaft Auf</button>
+        <button class="btn-close" onclick="sendCommand('dauer_zu')">Dauerhaft Zu</button>
     </div>
 </div>
 
@@ -69,7 +69,7 @@
     }
 
     // HTTP-API Befehl senden
-    function sendCommand(cmd) {
+    function sendCommand(action) {
         const ip = document.getElementById('ipSelect').value;
         const pwd = document.getElementById('adminPwd').value;
 
@@ -78,11 +78,24 @@
             return;
         }
 
+        let apiCommand = "";
+
+        // API Befehle exakt nach Dokumentation zuweisen
+        if (action === 'temp_auf') {
+            apiCommand = "trigger&relay=1"; // Relais 1 auslösen
+        } else if (action === 'dauer_auf') {
+            // HINWEIS: Ersetze "OPTIONSNAME" durch die genaue Variable deiner Anlage
+            apiCommand = "set&OPTIONSNAME=1"; 
+        } else if (action === 'dauer_zu') {
+            // HINWEIS: Ersetze "OPTIONSNAME" durch die genaue Variable deiner Anlage
+            apiCommand = "set&OPTIONSNAME=0"; 
+        }
+
         // URL Zusammenbau für API
-        const url = `https://${ip}/?key=${encodeURIComponent(pwd)}&api=${cmd}`;
+        const url = `https://${ip}/?key=${encodeURIComponent(pwd)}&api=${apiCommand}`;
 
         fetch(url, { method: 'GET', mode: 'no-cors' })
-            .then(() => console.log(`Befehl ${cmd} gesendet.`))
+            .then(() => console.log(`Befehl ${apiCommand} gesendet.`))
             .catch(err => console.error("Fehler beim Senden:", err));
     }
 
@@ -104,24 +117,28 @@
 
         statusDisplay.innerText = "Verbinde...";
 
-        // URL Zusammenbau für SSE (Port 8443 für HTTPS)
-        const sseUrl = `https://${ip}:8443/?key=${encodeURIComponent(pwd)}&sse&access_state_1&relay_contact_1`;
+        // URL Zusammenbau für SSE mit CORS und EVENTSOURCE nach Doku
+        const sseUrl = `https://${ip}:8443/?key=${encodeURIComponent(pwd)}&sse&cors&eventsource&access_state_1&relay_contact_1`;
 
         sseSource = new EventSource(sseUrl);
 
         sseSource.onmessage = function(event) {
             console.log("SSE Event:", event.data);
-            // Simples Parsing der Events (kann je nach genauer Ausgabe der Behnke-Station angepasst werden)
+            
+            // Ausgabe filtern und schön anzeigen
             if (event.data.includes("access_state_1") || event.data.includes("relay_contact_1")) {
                  statusDisplay.innerText = event.data;
             } else if (event.data.includes("SSE_WELCOME")) {
                  statusDisplay.innerText = "Verbunden. Warte auf Statusänderung...";
+            } else if (event.data.includes("SSE_TOO_MANY_CONNECTIONS")) {
+                 statusDisplay.innerText = "Fehler: Zu viele Verbindungen zur Station!";
+                 sseSource.close();
             }
         };
 
         sseSource.onerror = function(err) {
             console.error("SSE Fehler:", err);
-            statusDisplay.innerText = "Verbindungsfehler (SSL-Zertifikat oder falsches Passwort?)";
+            statusDisplay.innerText = "Verbindungsfehler (Überprüfe IP und Passwort)";
             sseSource.close();
         };
     }
