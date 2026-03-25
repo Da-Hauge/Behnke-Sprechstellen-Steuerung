@@ -8,12 +8,73 @@ const COMMANDS = {
     HELP: 'help'
 };
 const STATUS_MAP = {
-    OPEN: 'auf',
-    CLOSED: 'zu'
+    OPEN: 'statusOpen',
+    CLOSED: 'statusClosed'
 };
 const THEME_KEY = 'behnke_theme';
 const THEME_LIGHT = 'light';
 const THEME_DARK = 'dark';
+const LANG_KEY = 'behnke_lang';
+const LANG_EN = 'en';
+const LANG_DE = 'de';
+
+// Translation strings
+const translations = {
+    en: {
+        title: 'Behnke Access Control',
+        selectLabel: 'Select access point (IP address):',
+        selectPlaceholder: '-- Please select --',
+        passwordLabel: 'Administrator password:',
+        passwordPlaceholder: 'Enter password',
+        statusLabel: 'Current status (Relay 1):',
+        tempOn: 'Temporary On',
+        permanentOn: 'Permanent On',
+        permanentOff: 'Permanent Off',
+        connecting: 'Connecting...',
+        connected: 'Connected (waiting for status...)',
+        disconnected: 'Disconnected, reconnecting...',
+        error: 'Connection error',
+        ipOrPasswordMissing: 'IP or password missing',
+        inputRequired: 'Input required',
+        commandSent: 'Command sent',
+        apiError: 'API error',
+        passwordRequired: 'Password required',
+        statusOpen: 'Status: open',
+        statusClosed: 'Status: closed',
+        statusFree: 'Status: free',
+        statusOn: 'Status: on',
+        statusOff: 'Status: off',
+        readingFailed: 'Reading failed',
+        unknownFormat: 'Unknown format'
+    },
+    de: {
+        title: 'Behnke Sprechstellen-Steuerung',
+        selectLabel: 'Sprechstelle (IP-Adresse) auswählen:',
+        selectPlaceholder: '-- Bitte wählen --',
+        passwordLabel: 'Administrator-Passwort:',
+        passwordPlaceholder: 'Passwort eingeben',
+        statusLabel: 'Aktueller Status (Relais 1):',
+        tempOn: 'Temporär Auf',
+        permanentOn: 'Dauerhaft Auf',
+        permanentOff: 'Dauerhaft Zu',
+        connecting: 'Verbinde...',
+        connected: 'Verbunden (warte auf Status...)',
+        disconnected: 'Getrennt, reconnect...',
+        error: 'Verbindungsfehler',
+        ipOrPasswordMissing: 'IP oder Passwort fehlt',
+        inputRequired: 'Eingabe erforderlich',
+        commandSent: 'Befehl gesendet',
+        apiError: 'API-Fehler',
+        passwordRequired: 'Passwort erforderlich',
+        statusOpen: 'Status: auf',
+        statusClosed: 'Status: zu',
+        statusFree: 'Status: frei',
+        statusOn: 'Status: an',
+        statusOff: 'Status: aus',
+        readingFailed: 'Lesen fehlgeschlagen',
+        unknownFormat: 'Unbekannter Format'
+    }
+};
 
 // Polling für aktuellen Zustand
 const ACCESS_STATE_POLL_DELAY_MS = 100;
@@ -32,6 +93,7 @@ function initApp() {
     cacheElements();
     loadPassword();
     initTheme();
+    initLanguage();
     bindEvents();
 }
 
@@ -44,6 +106,16 @@ function cacheElements() {
     domCache.statusDisplay = document.getElementById('statusDisplay');
     domCache.themeToggle = document.getElementById('themeToggle');
     domCache.themeIcon = document.querySelector('.theme-icon');
+    domCache.langToggle = document.getElementById('langToggle');
+    domCache.langText = document.querySelector('.lang-text');
+    domCache.titleElement = document.querySelector('h1');
+    domCache.selectLabel = document.querySelector('label[for="ipSelect"]');
+    domCache.passwordLabel = document.querySelector('label[for="adminPwd"]');
+    domCache.passwordInput = document.getElementById('adminPwd');
+    domCache.statusBox = document.querySelector('.status-box');
+    domCache.tempBtn = document.querySelector('.btn-temp');
+    domCache.openBtn = document.querySelector('.btn-open');
+    domCache.closeBtn = document.querySelector('.btn-close');
 }
 
 /**
@@ -98,6 +170,74 @@ function toggleTheme() {
 }
 
 /**
+ * Initialisiert die Sprache basierend auf gespeicherten Einstellungen oder Systempräferenz
+ */
+function initLanguage() {
+    const savedLang = localStorage.getItem(LANG_KEY);
+    const systemLang = navigator.language || navigator.userLanguage;
+    const isGermanSystem = systemLang && systemLang.startsWith('de');
+    
+    let lang = savedLang;
+    if (!lang) {
+        lang = isGermanSystem ? LANG_DE : LANG_EN;
+    }
+    
+    applyLanguage(lang);
+}
+
+/**
+ * Wendet die angegebene Sprache an
+ * @param {string} lang - 'en' oder 'de'
+ */
+function applyLanguage(lang) {
+    const langText = domCache.langText;
+    
+    if (lang === LANG_DE) {
+        if (langText) langText.textContent = 'DE';
+    } else {
+        if (langText) langText.textContent = 'EN';
+    }
+    
+    // Update all text content
+    updateUIText(lang);
+    localStorage.setItem(LANG_KEY, lang);
+}
+
+/**
+ * Aktualisiert alle UI-Texte basierend auf der gewählten Sprache
+ * @param {string} lang - 'en' oder 'de'
+ */
+function updateUIText(lang) {
+    const t = translations[lang];
+    
+    if (domCache.titleElement) domCache.titleElement.textContent = t.title;
+    if (domCache.selectLabel) domCache.selectLabel.textContent = t.selectLabel;
+    if (domCache.passwordLabel) domCache.passwordLabel.textContent = t.passwordLabel;
+    if (domCache.passwordInput) domCache.passwordInput.placeholder = t.passwordPlaceholder;
+    if (domCache.statusBox) domCache.statusBox.innerHTML = t.statusLabel + '<br><span class="status-indicator" id="statusDisplay">' + t.connecting + '</span>';
+    if (domCache.tempBtn) domCache.tempBtn.textContent = t.tempOn;
+    if (domCache.openBtn) domCache.openBtn.textContent = t.permanentOn;
+    if (domCache.closeBtn) domCache.closeBtn.textContent = t.permanentOff;
+    
+    // Update select options
+    if (domCache.ipSelect) {
+        const options = domCache.ipSelect.options;
+        if (options.length > 0) {
+            options[0].text = t.selectPlaceholder;
+        }
+    }
+}
+
+/**
+ * Schaltet zwischen Englisch und Deutsch um
+ */
+function toggleLanguage() {
+    const currentLang = localStorage.getItem(LANG_KEY) || LANG_EN;
+    const newLang = currentLang === LANG_EN ? LANG_DE : LANG_EN;
+    applyLanguage(newLang);
+}
+
+/**
  * Bindet Event-Listener an Buttons (falls IDs vorhanden)
  */
 function bindEvents() {
@@ -109,6 +249,9 @@ function bindEvents() {
     }
     if (domCache.themeToggle) {
         domCache.themeToggle.addEventListener('click', toggleTheme);
+    }
+    if (domCache.langToggle) {
+        domCache.langToggle.addEventListener('click', toggleLanguage);
     }
 }
 
@@ -127,7 +270,7 @@ async function queryAccessState() {
     const ip = domCache.ipSelect?.value?.trim();
     const pwd = domCache.adminPwd?.value?.trim();
     if (!ip || !pwd) {
-        updateStatus('IP oder Passwort fehlt');
+        updateStatus('ipOrPasswordMissing', true);
         return;
     }
 
@@ -136,7 +279,7 @@ async function queryAccessState() {
     try {
         const response = await fetch(url, { method: 'GET', mode: 'cors' });
         if (!response.ok) {
-            updateStatus(`Lesen fehlgeschlagen: ${response.status}`);
+            updateStatus('readingFailed', true);
             return;
         }
 
@@ -144,7 +287,7 @@ async function queryAccessState() {
         parseAccessStateResponse(text);
     } catch (error) {
         console.error('Fehler beim Lesen ACCESS_STATE_1:', error);
-        updateStatus('Fehler beim Lesen ACCESS_STATE_1');
+        updateStatus('readingFailed', true);
     }
 }
 
@@ -160,7 +303,7 @@ function parseAccessStateResponse(responseText) {
         return;
     }
 
-    updateStatus(`Unbekannter Format: ${responseText.split('\n')[0]}`);
+    updateStatus(`unknownFormat: ${responseText.split('\n')[0]}`, false);
 }
 
 /**
@@ -169,7 +312,7 @@ function parseAccessStateResponse(responseText) {
 function savePassword() {
     const pwd = domCache.adminPwd?.value?.trim();
     if (!pwd) {
-        alert('Passwort erforderlich');
+        alert(translations[localStorage.getItem(LANG_KEY) || LANG_EN].passwordRequired);
         return;
     }
     localStorage.setItem('behnke_pwd', pwd);
@@ -190,7 +333,7 @@ function startSSE() {
     const pwd = domCache.adminPwd?.value?.trim();
 
     if (!ip || !pwd) {
-        updateStatus('Eingabe erforderlich');
+        updateStatus('inputRequired', true);
         return;
     }
 
@@ -199,12 +342,12 @@ function startSSE() {
         sseConnection.close();
     }
 
-    updateStatus('Verbinde...');
+    updateStatus('connecting', true);
 
     const sseUrl = `https://${ip}${SSE_ENDPOINT}?key=${encodeURIComponent(pwd)}&sse&all&cors`;
     sseConnection = new EventSource(sseUrl);
 
-    sseConnection.onopen = () => updateStatus('Verbunden (warte auf Status...)');
+    sseConnection.onopen = () => updateStatus('connected', true);
 
     sseConnection.onmessage = (event) => {
         const data = event.data.trim();
@@ -219,10 +362,10 @@ function startSSE() {
 
     sseConnection.onerror = () => {
         if (sseConnection.readyState === EventSource.CLOSED) {
-            updateStatus('Getrennt, reconnect...');
+            updateStatus('disconnected', true);
             setTimeout(startSSE, 1000);
         } else {
-            updateStatus('Verbindungsfehler');
+            updateStatus('error', true);
         }
     };
 }
@@ -235,23 +378,25 @@ function startSSE() {
 function parseSSEStatus(data) {
     const relayMatch = data.match(/^TEMP_RELAY_CONTACT_1\s+(OPEN|CLOSED)$/i);
     if (relayMatch) {
-        updateStatus(`Status: ${STATUS_MAP[relayMatch[1].toUpperCase()]}`);
+        const statusKey = STATUS_MAP[relayMatch[1].toUpperCase()];
+        updateStatus(statusKey, true);
         return true;
     }
 
     const accessMatch = data.match(/^TEMP_ACCESS_STATE_1\s+(FREE|CLOSED)$/i);
     if (accessMatch) {
         const state = accessMatch[1].toUpperCase() === 'FREE' ? 'OPEN' : 'CLOSED';
-        updateStatus(`Status: ${STATUS_MAP[state]}`);
+        const statusKey = STATUS_MAP[state];
+        updateStatus(statusKey, true);
         return true;
     }
 
     if (/^STATE_ACCESS$/i.test(data)) {
-        updateStatus('Status: auf');
+        updateStatus('statusOn', true);
         return true;
     }
     if (/^STATE_RUN$/i.test(data)) {
-        updateStatus('Status: zu');
+        updateStatus('statusOff', true);
         return true;
     }
 
@@ -269,7 +414,8 @@ function parseSSEStatus(data) {
             if (/relay_contact_1/i.test(pattern.source)) {
                 status = status === '1' ? 'CLOSED' : 'OPEN';
             }
-            updateStatus(`Status: ${STATUS_MAP[status] || status}`);
+            const statusKey = STATUS_MAP[status] || `status${status.charAt(0).toUpperCase() + status.slice(1).toLowerCase()}`;
+            updateStatus(statusKey, true);
             return true;
         }
     }
@@ -279,159 +425,21 @@ function parseSSEStatus(data) {
 
 /**
  * Aktualisiert Status-Anzeige
- * @param {string} text - Status-Text
+ * @param {string} key - Translation key oder direkter Text
+ * @param {boolean} isKey - True wenn key ein Translation-Key ist
  */
-function updateStatus(text) {
-    if (domCache.statusDisplay) {
-        domCache.statusDisplay.textContent = text;
-    }
-}
-
-// Starte App beim DOM-Load
-document.addEventListener('DOMContentLoaded', initApp);
-
-/**
- * Globale Funktion für index.html onChange + onClick
- */
-function connectSSE() {
-    startSSE();
-    scheduleAccessStateQuery();
-}
-
-/**
- * Sendet UI-Befehle (Temporär Auf / Dauerhaft Auf / Dauerhaft Zu)
- */
-async function sendCommand(action) {
-    const ip = domCache.ipSelect?.value?.trim();
-    const pwd = domCache.adminPwd?.value?.trim();
-
-    if (!ip || !pwd) {
-        alert('IP und Passwort erforderlich');
-        return;
-    }
-
-    let command;
-    if (action === 'temp_auf') {
-        command = COMMANDS.TEMP_AUF;
+function updateStatus(key, isKey = false) {
+    if (!domCache.statusDisplay) return;
+    
+    let text;
+    if (isKey) {
+        const currentLang = localStorage.getItem(LANG_KEY) || LANG_EN;
+        text = translations[currentLang][key] || key;
     } else {
-        command = COMMANDS.HELP;
+        text = key;
     }
-
-    const url = `https://${ip}${API_ENDPOINT}?key=${encodeURIComponent(pwd)}&api=${command}`;
-
-    try {
-        await fetch(url, { method: 'GET', mode: 'no-cors' });
-        console.log(`Befehl gesendet: ${command}`);
-    } catch (error) {
-        console.error('API-Fehler:', error);
-    } finally {
-        scheduleAccessStateQuery();
-    }
-}
-
-/**
- * Startet SSE-Verbindung
- */
-function startSSE() {
-    const ip = domCache.ipSelect?.value?.trim();
-    const pwd = domCache.adminPwd?.value?.trim();
-
-    if (!ip || !pwd) {
-        updateStatus('Eingabe erforderlich');
-        return;
-    }
-
-    if (sseConnection) {
-        sseConnection.close();
-    }
-
-    updateStatus('Verbinde...');
-
-    const sseUrl = `https://${ip}${SSE_ENDPOINT}?key=${encodeURIComponent(pwd)}&sse&all&cors`;
-    sseConnection = new EventSource(sseUrl);
-
-    sseConnection.onopen = () => updateStatus('Verbunden (warte auf Status...)');
-
-    sseConnection.onmessage = (event) => {
-        const data = event.data.trim();
-        if (parseSSEStatus(data)) return;
-        if (/SSE_KEEP_ALIVE/i.test(data)) return;
-        updateStatus(`SSE: ${data}`);
-        if (/SSE_BYE/i.test(data)) {
-            sseConnection.close();
-            setTimeout(startSSE, 500);
-        }
-    };
-
-    sseConnection.onerror = () => {
-        if (sseConnection.readyState === EventSource.CLOSED) {
-            updateStatus('Getrennt, reconnect...');
-            setTimeout(startSSE, 1000);
-        } else {
-            updateStatus('Verbindungsfehler');
-        }
-    };
-}
-
-
-/**
- * Parst Status aus SSE-Daten
- * @param {string} data - SSE-Nachricht
- * @returns {boolean} - True wenn Status geparst
- */
-function parseSSEStatus(data) {
-    const relayMatch = data.match(/^TEMP_RELAY_CONTACT_1\s+(OPEN|CLOSED)$/i);
-    if (relayMatch) {
-        updateStatus(`Status: ${STATUS_MAP[relayMatch[1].toUpperCase()]}`);
-        return true;
-    }
-
-    const accessMatch = data.match(/^TEMP_ACCESS_STATE_1\s+(FREE|CLOSED)$/i);
-    if (accessMatch) {
-        const state = accessMatch[1].toUpperCase() === 'FREE' ? 'OPEN' : 'CLOSED';
-        updateStatus(`Status: ${STATUS_MAP[state]}`);
-        return true;
-    }
-
-    if (/^STATE_ACCESS$/i.test(data)) {
-        updateStatus('Status: auf');
-        return true;
-    }
-    if (/^STATE_RUN$/i.test(data)) {
-        updateStatus('Status: zu');
-        return true;
-    }
-
-    // Vereinfachte Patterns
-    const patterns = [
-        /access_state_1\s*=\s*(\w+)/i,
-        /relay_contact_1\s*=\s*(\w+)/i,
-        /state\s*=\s*(\w+)/i
-    ];
-
-    for (const pattern of patterns) {
-        const match = data.match(pattern);
-        if (match) {
-            let status = match[1].toUpperCase();
-            if (/relay_contact_1/i.test(pattern.source)) {
-                status = status === '1' ? 'CLOSED' : 'OPEN';
-            }
-            updateStatus(`Status: ${STATUS_MAP[status] || status}`);
-            return true;
-        }
-    }
-
-    return false;
-}
-
-/**
- * Aktualisiert Status-Anzeige
- * @param {string} text - Status-Text
- */
-function updateStatus(text) {
-    if (domCache.statusDisplay) {
-        domCache.statusDisplay.textContent = text;
-    }
+    
+    domCache.statusDisplay.textContent = text;
 }
 
 // Starte App beim DOM-Load
