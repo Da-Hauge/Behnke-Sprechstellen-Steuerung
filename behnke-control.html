@@ -101,6 +101,29 @@
         const statusDisplay = document.getElementById('statusDisplay');
         const t = text.trim();
 
+        // Behnke liefert Texte mit Temp- und State-Events.
+        if (/^TEMP_RELAY_CONTACT_1\s+(OPEN|CLOSED)$/i.test(t)) {
+            const m = t.match(/^TEMP_RELAY_CONTACT_1\s+(OPEN|CLOSED)$/i);
+            statusDisplay.innerText = "Status: " + m[1].toUpperCase();
+            return true;
+        }
+
+        if (/^TEMP_ACCESS_STATE_1\s+(FREE|CLOSED)$/i.test(t)) {
+            const m = t.match(/^TEMP_ACCESS_STATE_1\s+(FREE|CLOSED)$/i);
+            statusDisplay.innerText = "Status: " + (m[1].toUpperCase() === 'FREE' ? 'OPEN' : 'CLOSED');
+            return true;
+        }
+
+        if (/^STATE_ACCESS$/i.test(t)) {
+            statusDisplay.innerText = "Status: OPEN (STATE_ACCESS)";
+            return true;
+        }
+
+        if (/^STATE_RUN$/i.test(t)) {
+            statusDisplay.innerText = "Status: CLOSED (STATE_RUN)";
+            return true;
+        }
+
         const patterns = [
             /access_state_1\s*=\s*(\w+)/i,
             /relay_contact_1\s*=\s*(\w+)/i,
