@@ -4,7 +4,8 @@ const API_ENDPOINT = '/';
 const SSE_ENDPOINT = ':8443/';
 
 const COMMANDS = {
-    TEMP_AUF: 'trigger&relay=1',
+    // Jetzt mit dem korrekten api= Präfix
+    TEMP_AUF: 'api=trigger&relay=1',
     DAUER_AUF: 'api=set&access_state_1=free',
     DAUER_ZU: 'api=set&access_state_1=closed',
     GET_STATE: 'api=get&access_state_1'
@@ -89,22 +90,26 @@ async function sendCommand(commandString) {
         return;
     }
 
+    // Die URL wird jetzt sauber mit dem Passwort und dem API-String zusammengebaut
     const url = `https://${ip}${API_ENDPOINT}?key=${encodeURIComponent(pwd)}&${commandString}&cors`;
 
+    console.log("Sende Befehl:", url); // Hilft dir beim Testen in der Konsole (F12)
+
     try {
-        // no-cors erzwingt das Absenden, auch wenn die Gegenstelle nicht "erlaubt" zu antworten
         await fetch(url, { 
-            mode: 'no-cors',
+            mode: 'no-cors', // Verhindert, dass der Browser den Befehl wegen CORS blockiert
             cache: 'no-cache'
         });
+        
         updateStatus('commandSent');
-        // Farbe kurz auf Blau für Feedback
+        
+        // Farbe kurz auf Blau ändern für optisches Feedback
         domCache.statusDisplay.style.color = '#007bff';
         
-        // Nach 1 Sekunde Status prüfen
+        // Status nach einer kurzen Verzögerung aktualisieren
         setTimeout(queryAccessState, 1000); 
     } catch (error) {
-        console.error('Send Error:', error);
+        console.error('Sende-Fehler:', error);
         updateStatus('error');
     }
 }
