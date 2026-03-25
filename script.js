@@ -1,7 +1,8 @@
+// ZENTRALE DATENVERWALTUNG
 const STATIONS = {
-    "192.168.104.191": "Altbau 191",
-    "192.168.104.192": "Altbau 192",
-    "192.168.104.193": "Neubau 193"
+    "192.168.104.191": "Altbau alte Pforte",
+    "192.168.104.192": "Altbau neue Pforte",
+    "192.168.104.193": "Neubau Pforte"
 };
 
 let currentIP = "";
@@ -23,6 +24,7 @@ const dom = {
 };
 
 document.addEventListener('DOMContentLoaded', () => {
+    initStationSwitcher();
     initTheme();
     dom.switcher.addEventListener('change', (e) => loadStation(e.target.value));
     dom.pwdInput.addEventListener('change', savePassword);
@@ -31,22 +33,38 @@ document.addEventListener('DOMContentLoaded', () => {
     dom.themeToggle.addEventListener('click', rotateTheme);
 });
 
+function initStationSwitcher() {
+    dom.switcher.innerHTML = '<option value="" disabled selected>Station wählen...</option>';
+    Object.entries(STATIONS).forEach(([ip, name]) => {
+        const opt = document.createElement('option');
+        opt.value = ip;
+        opt.textContent = `${name} (${ip})`;
+        dom.switcher.appendChild(opt);
+    });
+}
+
 function loadStation(ip) {
-    stopAutoTrigger();
-    if (sseConnection) sseConnection.close();
+    // Sanfter Übergang
+    dom.content.style.opacity = "0";
     
-    currentIP = ip;
-    dom.content.style.visibility = 'visible';
-    
-    const saved = localStorage.getItem(`behnke_pwd_${ip}`);
-    dom.pwdInput.value = saved || "";
-    
-    dom.permanentToggle.checked = false;
-    updateSystemStatus(saved ? "Bereit" : "Passwort fehlt");
-    updateRelayStatus("Unbekannt");
-    
-    showToast(`${STATIONS[ip]} geladen`);
-    if(saved) startSSE();
+    setTimeout(() => {
+        stopAutoTrigger();
+        if (sseConnection) sseConnection.close();
+        
+        currentIP = ip;
+        dom.content.style.visibility = 'visible';
+        dom.content.style.opacity = "1";
+        
+        const saved = localStorage.getItem(`behnke_pwd_${ip}`);
+        dom.pwdInput.value = saved || "";
+        
+        dom.permanentToggle.checked = false;
+        updateSystemStatus(saved ? "Bereit" : "Passwort fehlt");
+        updateRelayStatus("Unbekannt");
+        
+        showToast(`${STATIONS[ip]} geladen`);
+        if(saved) startSSE();
+    }, 200);
 }
 
 function savePassword() {
@@ -58,12 +76,8 @@ function savePassword() {
 
 async function apiCall(cmd) {
     const pwd = dom.pwdInput.value;
-    if (!pwd) return false;
-    
-    // WICHTIG: Behnke braucht oft 'key' als Parameter. 
-    // Wir nutzen no-cors, damit der Browser die Antwort nicht blockiert.
+    if (!pwd || !currentIP) return false;
     const url = `https://${currentIP}/?key=${encodeURIComponent(pwd)}&${cmd}&cors`;
-    
     try {
         await fetch(url, { mode: 'no-cors', cache: 'no-cache' });
         return true;
@@ -76,59 +90,35 @@ async function apiCall(cmd) {
 function startSSE() {
     const pwd = dom.pwdInput.value;
     if (!currentIP || !pwd) return;
-
     if (sseConnection) sseConnection.close();
     
     updateSystemStatus("Verbinde...");
-    
-    // Port 8443 ist Standard für Behnke SSE
     const sseUrl = `https://${currentIP}:8443/?key=${encodeURIComponent(pwd)}&sse&all&cors`;
 
     try {
         sseConnection = new EventSource(sseUrl);
-
         sseConnection.onopen = () => {
-            updateSystemStatus("Verbunden (Live)");
+            updateSystemStatus("Verbunden");
             showToast("Live-Verbindung aktiv", "success");
         };
-
         sseConnection.onmessage = (e) => {
             const msg = e.data.trim().toUpperCase();
-            console.log("SSE-Daten:", msg); // Zur Diagnose in der F12-Konsole
-
-            // --- VERBESSERTE LOGIK BASIEREND AUF DEINEM LOG ---
-            
-            // Suche nach "OPEN", "FREE" oder "STATE_ACCESS"
             if (/OPEN|FREE|STATE_ACCESS/.test(msg)) {
                 updateRelayStatus("Offen");
-            } 
-            // Suche nach "CLOSED" oder "STATE_RUN"
-            else if (/CLOSED|STATE_RUN/.test(msg)) {
-                // Nur auf Geschlossen setzen, wenn kein Dauer-Modus aktiv ist
-                if (!autoTriggerInterval) {
-                    updateRelayStatus("Geschlossen");
-                }
+            } else if (/CLOSED|STATE_RUN/.test(msg)) {
+                if (!autoTriggerInterval) updateRelayStatus("Geschlossen");
             }
         };
-
-        sseConnection.onerror = (err) => {
-            console.error("SSE Fehler:", err);
-            updateSystemStatus("Verbindungsfehler (CORS?)");
+        sseConnection.onerror = () => {
+            updateSystemStatus("Fehler");
             sseConnection.close();
-            // Automatischer Reconnect alle 10 Sek.
             setTimeout(startSSE, 10000);
         };
-
-    } catch (e) {
-        updateSystemStatus("SSE nicht unterstützt");
-    }
+    } catch (e) { updateSystemStatus("Fehler"); }
 }
-
-// --- Restliche Funktionen bleiben gleich ---
 
 async function runTrigger() {
     if (dom.triggerBtn.disabled) return;
-    updateSystemStatus("Sende Impuls...");
     const ok = await apiCall('api=trigger&relay=1');
     if (ok) {
         showToast("Impuls gesendet", "success");
@@ -171,7 +161,7 @@ function stopAutoTrigger() {
         clearInterval(autoTriggerInterval);
         autoTriggerInterval = null;
     }
-    updateSystemStatus("Bereit");
+    if(currentIP) updateSystemStatus("Bereit");
 }
 
 function updateSystemStatus(txt) { dom.systemStatus.textContent = txt; }

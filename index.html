@@ -15,10 +15,7 @@
             <div class="station-selector-wrapper">
                 <small>Sprechstelle</small>
                 <select id="stationSwitcher" class="header-dropdown">
-                    <option value="" disabled selected>Bitte wählen...</option>
-                    <option value="192.168.104.191">Altbau 191</option> 
-                    <option value="192.168.104.192">Altbau 192</option> 
-                    <option value="192.168.104.193">Neubau 193</option> 
+                    <option value="" disabled selected>Lade Stationen...</option>
                 </select>
             </div>
         </div>
@@ -27,16 +24,16 @@
         </div>
     </header>
 
-    <main class="container" id="mainContent" style="visibility: hidden;">
+    <main class="container" id="mainContent" style="visibility: hidden; opacity: 0;">
         
-        <div class="tile tile-full">
+        <div class="tile">
             <div class="tile-header">
                 <label>Systemstatus</label>
                 <div id="systemStatus" class="status-value">Bereit</div>
             </div>
         </div>
 
-        <div class="tile tile-full">
+        <div class="tile">
             <div class="tile-header">
                 <label>Relais 1</label>
                 <div id="relayStatus" class="status-value relay-unbekannt">Unbekannt</div>
@@ -61,7 +58,7 @@
             </div>
         </div>
 
-        <div class="tile tile-full">
+        <div class="tile">
             <label>Sicherheits-Einstellungen</label>
             <div class="input-wrapper">
                 <span class="material-icons">vpn_key</span>
