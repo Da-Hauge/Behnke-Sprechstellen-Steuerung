@@ -42,10 +42,10 @@ function loadStation(ip) {
     dom.pwdInput.value = saved || "";
     
     dom.permanentToggle.checked = false;
-    updateSystemStatus(saved ? "Bereit" : "Passwort eingeben");
+    updateSystemStatus(saved ? "Bereit" : "Passwort fehlt");
     updateRelayStatus("Unbekannt");
     
-    showToast(`${STATIONS[ip]} ausgewählt`);
+    showToast(`${STATIONS[ip]} geladen`);
     if(saved) startSSE();
 }
 
@@ -53,15 +53,85 @@ function savePassword() {
     if(!currentIP) return;
     localStorage.setItem(`behnke_pwd_${currentIP}`, dom.pwdInput.value);
     showToast("Passwort gespeichert", "success");
-    updateSystemStatus("Bereit");
     startSSE();
 }
 
+async function apiCall(cmd) {
+    const pwd = dom.pwdInput.value;
+    if (!pwd) return false;
+    
+    // WICHTIG: Behnke braucht oft 'key' als Parameter. 
+    // Wir nutzen no-cors, damit der Browser die Antwort nicht blockiert.
+    const url = `https://${currentIP}/?key=${encodeURIComponent(pwd)}&${cmd}&cors`;
+    
+    try {
+        await fetch(url, { mode: 'no-cors', cache: 'no-cache' });
+        return true;
+    } catch (e) {
+        console.error("API Error:", e);
+        return false;
+    }
+}
+
+function startSSE() {
+    const pwd = dom.pwdInput.value;
+    if (!currentIP || !pwd) return;
+
+    if (sseConnection) sseConnection.close();
+    
+    updateSystemStatus("Verbinde...");
+    
+    // Port 8443 ist Standard für Behnke SSE
+    const sseUrl = `https://${currentIP}:8443/?key=${encodeURIComponent(pwd)}&sse&all&cors`;
+
+    try {
+        sseConnection = new EventSource(sseUrl);
+
+        sseConnection.onopen = () => {
+            updateSystemStatus("Verbunden (Live)");
+            showToast("Live-Verbindung aktiv", "success");
+        };
+
+        sseConnection.onmessage = (e) => {
+            const msg = e.data.trim().toUpperCase();
+            console.log("SSE-Daten:", msg); // Zur Diagnose in der F12-Konsole
+
+            // --- VERBESSERTE LOGIK BASIEREND AUF DEINEM LOG ---
+            
+            // Suche nach "OPEN", "FREE" oder "STATE_ACCESS"
+            if (/OPEN|FREE|STATE_ACCESS/.test(msg)) {
+                updateRelayStatus("Offen");
+            } 
+            // Suche nach "CLOSED" oder "STATE_RUN"
+            else if (/CLOSED|STATE_RUN/.test(msg)) {
+                // Nur auf Geschlossen setzen, wenn kein Dauer-Modus aktiv ist
+                if (!autoTriggerInterval) {
+                    updateRelayStatus("Geschlossen");
+                }
+            }
+        };
+
+        sseConnection.onerror = (err) => {
+            console.error("SSE Fehler:", err);
+            updateSystemStatus("Verbindungsfehler (CORS?)");
+            sseConnection.close();
+            // Automatischer Reconnect alle 10 Sek.
+            setTimeout(startSSE, 10000);
+        };
+
+    } catch (e) {
+        updateSystemStatus("SSE nicht unterstützt");
+    }
+}
+
+// --- Restliche Funktionen bleiben gleich ---
+
 async function runTrigger() {
     if (dom.triggerBtn.disabled) return;
+    updateSystemStatus("Sende Impuls...");
     const ok = await apiCall('api=trigger&relay=1');
     if (ok) {
-        showToast("Öffnungs-Impuls gesendet", "success");
+        showToast("Impuls gesendet", "success");
         visualizeCountdown();
     }
 }
@@ -71,7 +141,6 @@ function visualizeCountdown() {
     dom.triggerBtn.classList.add('active');
     dom.triggerText.textContent = "Aktiv";
     dom.progressBar.style.width = "100%";
-    
     setTimeout(() => dom.progressBar.style.width = "0%", 50);
     setTimeout(() => {
         dom.triggerBtn.disabled = false;
@@ -83,17 +152,18 @@ function visualizeCountdown() {
 function togglePermanent() {
     if (dom.permanentToggle.checked) {
         startAutoTrigger();
-        showToast("Daueröffnung AKTIV", "warning");
+        showToast("Daueröffnung EIN", "warning");
     } else {
         stopAutoTrigger();
-        showToast("Daueröffnung DEAKTIVIERT");
+        showToast("Daueröffnung AUS");
     }
 }
 
 function startAutoTrigger() {
     apiCall('api=trigger&relay=1');
     autoTriggerInterval = setInterval(() => apiCall('api=trigger&relay=1'), 5000);
-    updateSystemStatus("Auto-Trigger läuft...");
+    updateSystemStatus("Auto-Trigger AKTIV");
+    updateRelayStatus("Offen");
 }
 
 function stopAutoTrigger() {
@@ -104,59 +174,11 @@ function stopAutoTrigger() {
     updateSystemStatus("Bereit");
 }
 
-async function apiCall(cmd) {
-    const pwd = dom.pwdInput.value;
-    if (!pwd) return false;
-    try {
-        // Wir senden den Befehl "blind" (no-cors), da die Hardware oft nicht korrekt auf OPTIONS reagiert
-        await fetch(`https://${currentIP}/?key=${encodeURIComponent(pwd)}&${cmd}&cors`, { mode: 'no-cors' });
-        return true;
-    } catch (e) { return false; }
-}
-
-function startSSE() {
-    const pwd = dom.pwdInput.value;
-    if (sseConnection) sseConnection.close();
-    
-    updateSystemStatus("Verbinde...");
-    
-    sseConnection = new EventSource(`https://${currentIP}:8443/?key=${encodeURIComponent(pwd)}&sse&all&cors`);
-
-    sseConnection.onopen = () => {
-        updateSystemStatus("Verbunden (Live)");
-    };
-
-    sseConnection.onmessage = (e) => {
-        const data = e.data.trim().toUpperCase();
-        
-        // --- LOGIK FÜR DEINEN LOG-OUTPUT ---
-        // Erkennt: TEMP_RELAY_CONTACT_1 OPEN, TEMP_ACCESS_STATE_1 FREE, STATE_ACCESS
-        if (data.includes('OPEN') || data.includes('FREE') || data.includes('STATE_ACCESS')) {
-            updateRelayStatus("Offen");
-        } 
-        // Erkennt: TEMP_RELAY_CONTACT_1 CLOSED, TEMP_ACCESS_STATE_1 CLOSED, STATE_RUN
-        else if (data.includes('CLOSED') || data.includes('STATE_RUN')) {
-            // Nur auf "Geschlossen" setzen, wenn wir nicht gerade im Auto-Trigger Modus sind
-            if (!autoTriggerInterval) {
-                updateRelayStatus("Geschlossen");
-            }
-        }
-    };
-
-    sseConnection.onerror = () => {
-        updateSystemStatus("Verbindung unterbrochen");
-        // Automatischer Reconnect nach 5 Sek
-        setTimeout(startSSE, 5000);
-    };
-}
-
 function updateSystemStatus(txt) { dom.systemStatus.textContent = txt; }
-
 function updateRelayStatus(val) {
     dom.relayStatus.textContent = val;
     dom.relayStatus.className = `status-value relay-${val.toLowerCase()}`;
 }
-
 function showToast(m, type="info") {
     const t = document.createElement('div');
     t.className = `toast toast-${type}`;
@@ -164,12 +186,10 @@ function showToast(m, type="info") {
     dom.toastContainer.appendChild(t);
     setTimeout(() => { t.style.opacity="0"; setTimeout(() => t.remove(), 400); }, 3000);
 }
-
 function rotateTheme() {
     const isDark = document.body.classList.toggle('dark-mode');
     localStorage.setItem('behnke_theme', isDark ? 'dark' : 'light');
 }
-
 function initTheme() {
     if (localStorage.getItem('behnke_theme') === 'dark') document.body.classList.add('dark-mode');
 }
