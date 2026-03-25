@@ -1,6 +1,3 @@
-// script.js - Behnke Master-Steuerung
-
-const API_ENDPOINT = '/';
 const STATIONS = {
     "192.168.104.191": "Altbau neue Pforte (191)",
     "192.168.104.192": "Altbau neue Pforte (192)",
@@ -10,7 +7,6 @@ const STATIONS = {
 let currentIP = "";
 let autoTriggerInterval = null;
 let sseConnection = null;
-let countdownTimer = null;
 
 const dom = {
     switcher: document.getElementById('stationSwitcher'),
@@ -19,168 +15,146 @@ const dom = {
     pwdInput: document.getElementById('stationPwd'),
     triggerBtn: document.getElementById('triggerBtn'),
     triggerText: document.getElementById('triggerText'),
-    countdownBar: document.getElementById('countdownBar'),
+    progressBar: document.getElementById('progress'),
     permanentToggle: document.getElementById('permanentToggle'),
-    statusField: document.getElementById('relayStatusField'),
+    systemStatus: document.getElementById('systemStatus'),
+    relayStatus: document.getElementById('relayStatus'),
     toastContainer: document.getElementById('toastContainer'),
     themeToggle: document.getElementById('themeToggle')
 };
 
-// Initialisierung
 document.addEventListener('DOMContentLoaded', () => {
     initTheme();
     dom.switcher.addEventListener('change', (e) => loadStation(e.target.value));
-    dom.pwdInput.addEventListener('change', savePasswordForIP);
-    dom.triggerBtn.addEventListener('click', handleTrigger);
-    dom.permanentToggle.addEventListener('change', handlePermanentToggle);
-    dom.themeToggle.addEventListener('click', toggleTheme);
+    dom.pwdInput.addEventListener('change', savePassword);
+    dom.triggerBtn.addEventListener('click', runTrigger);
+    dom.permanentToggle.addEventListener('change', togglePermanent);
+    dom.themeToggle.addEventListener('click', rotateTheme);
 });
 
 function loadStation(ip) {
-    // Reset
     stopAutoTrigger();
     if (sseConnection) sseConnection.close();
     
     currentIP = ip;
     dom.nameDisplay.textContent = STATIONS[ip];
-    dom.content.style.display = 'block';
+    dom.content.style.visibility = 'visible';
     
-    // Passwort für diese IP laden
-    const savedPwd = localStorage.getItem(`behnke_pwd_${ip}`);
-    dom.pwdInput.value = savedPwd || "";
+    // Passwort-Logik (IP-spezifisch)
+    const saved = localStorage.getItem(`behnke_pwd_${ip}`);
+    dom.pwdInput.value = saved || "";
     
-    // UI zurücksetzen
     dom.permanentToggle.checked = false;
-    updateStatusField('Verbunden', 'neutral');
+    updateSystemStatus(saved ? "Bereit" : "Passwort eingeben");
+    updateRelayStatus("Unbekannt");
     
-    showToast(`${STATIONS[ip]} ausgewählt`, 'info');
+    showToast(`${STATIONS[ip]} geladen`);
+    if(saved) startSSE();
+}
+
+function savePassword() {
+    localStorage.setItem(`behnke_pwd_${currentIP}`, dom.pwdInput.value);
+    showToast("Passwort gespeichert", "success");
+    updateSystemStatus("Bereit");
     startSSE();
 }
 
-function savePasswordForIP() {
-    if (currentIP) {
-        localStorage.setItem(`behnke_pwd_${currentIP}`, dom.pwdInput.value);
-        showToast("Passwort gespeichert", "success");
-        startSSE(); // Reconnect mit neuem PW
-    }
-}
-
-// --- AKTIONEN ---
-
-async function handleTrigger() {
-    if (dom.triggerBtn.classList.contains('active')) return;
-
-    const ok = await sendCommand('api=trigger&relay=1');
+async function runTrigger() {
+    if (dom.triggerBtn.disabled) return;
+    const ok = await apiCall('api=trigger&relay=1');
     if (ok) {
-        showToast("Tür wird für 5s geöffnet", "success");
-        startCountdown();
+        showToast("Öffne für 5 Sekunden", "success");
+        visualizeCountdown();
     }
 }
 
-function startCountdown() {
-    dom.triggerBtn.classList.add('active');
+function visualizeCountdown() {
+    dom.triggerBtn.disabled = true;
+    dom.triggerBtn.classList.add('btn-active');
     dom.triggerText.textContent = "Geöffnet...";
-    dom.countdownBar.style.width = '100%';
-
-    // Animation der Bar
-    setTimeout(() => dom.countdownBar.style.width = '0%', 10);
-
+    dom.progressBar.style.width = "100%";
+    
+    setTimeout(() => dom.progressBar.style.width = "0%", 50);
     setTimeout(() => {
-        dom.triggerBtn.classList.remove('active');
+        dom.triggerBtn.disabled = false;
+        dom.triggerBtn.classList.remove('btn-active');
         dom.triggerText.textContent = "Temporär öffnen";
     }, 5000);
 }
 
-function handlePermanentToggle() {
+function togglePermanent() {
     if (dom.permanentToggle.checked) {
         startAutoTrigger();
-        showToast("Daueröffnung aktiviert", "warning");
+        showToast("Daueröffnung aktiv", "warning");
     } else {
         stopAutoTrigger();
-        showToast("Daueröffnung deaktiviert", "info");
+        showToast("Daueröffnung beendet");
     }
 }
 
 function startAutoTrigger() {
-    if (autoTriggerInterval) return;
-    sendCommand('api=trigger&relay=1');
-    autoTriggerInterval = setInterval(() => {
-        sendCommand('api=trigger&relay=1');
-    }, 5000);
-    updateStatusField('DAUERHAFT OFFEN', 'open');
+    apiCall('api=trigger&relay=1');
+    autoTriggerInterval = setInterval(() => apiCall('api=trigger&relay=1'), 5000);
+    updateSystemStatus("Auto-Trigger läuft");
 }
 
 function stopAutoTrigger() {
-    if (autoTriggerInterval) {
-        clearInterval(autoTriggerInterval);
-        autoTriggerInterval = null;
-    }
-    updateStatusField('Normalbetrieb', 'neutral');
+    clearInterval(autoTriggerInterval);
+    autoTriggerInterval = null;
+    updateSystemStatus("Bereit");
 }
 
-// --- KOMMUNIKATION ---
-
-async function sendCommand(cmd) {
+async function apiCall(cmd) {
     const pwd = dom.pwdInput.value;
-    if (!currentIP || !pwd) {
-        showToast("Passwort fehlt!", "error");
-        return false;
-    }
-
-    const url = `https://${currentIP}/?key=${encodeURIComponent(pwd)}&${cmd}&cors`;
+    if (!pwd) { showToast("Passwort fehlt!", "error"); return false; }
+    
     try {
-        await fetch(url, { mode: 'no-cors' });
+        await fetch(`https://${currentIP}/?key=${encodeURIComponent(pwd)}&${cmd}&cors`, { mode: 'no-cors' });
         return true;
     } catch (e) {
-        showToast("Verbindungsfehler", "error");
+        showToast("API Fehler", "error");
         return false;
     }
 }
 
 function startSSE() {
     const pwd = dom.pwdInput.value;
-    if (!currentIP || !pwd) return;
-
     if (sseConnection) sseConnection.close();
     
-    const sseUrl = `https://${currentIP}:8443/?key=${encodeURIComponent(pwd)}&sse&all&cors`;
-    sseConnection = new EventSource(sseUrl);
+    updateSystemStatus("Verbinde...");
+    sseConnection = new EventSource(`https://${currentIP}:8443/?key=${encodeURIComponent(pwd)}&sse&all&cors`);
 
-    sseConnection.onmessage = (event) => {
-        const data = event.data.trim();
-        if (data.includes('FREE') || data.includes('OPEN') || data.includes('RELAY_CONTACT_1 1')) {
-            updateStatusField('OFFEN', 'open');
-        } else if (data.includes('CLOSED') || data.includes('RELAY_CONTACT_1 0')) {
-            if (!autoTriggerInterval) updateStatusField('ZU', 'closed');
+    sseConnection.onopen = () => updateSystemStatus("Verbunden");
+    sseConnection.onmessage = (e) => {
+        const d = e.data.toUpperCase();
+        if (d.includes('OPEN') || d.includes('FREE') || d.includes('RELAY_CONTACT_1 1')) {
+            updateRelayStatus("Offen");
+        } else if (d.includes('CLOSED') || d.includes('RELAY_CONTACT_1 0')) {
+            updateRelayStatus("Geschlossen");
         }
     };
+    sseConnection.onerror = () => updateSystemStatus("Verbindung verloren");
 }
 
-// --- UI HELPER ---
+function updateSystemStatus(txt) { dom.systemStatus.textContent = txt; }
 
-function updateStatusField(text, state) {
-    dom.statusField.textContent = `Relais: ${text}`;
-    dom.statusField.className = `status-badge ${state}`;
+function updateRelayStatus(val) {
+    dom.relayStatus.textContent = val;
+    dom.relayStatus.className = `status-value relay-${val.toLowerCase()}`;
 }
 
-function showToast(msg, type = 'info') {
-    const toast = document.createElement('div');
-    toast.className = `toast ${type}`;
-    toast.textContent = msg;
-    dom.toastContainer.appendChild(toast);
-    
-    setTimeout(() => {
-        toast.style.opacity = '0';
-        setTimeout(() => toast.remove(), 500);
-    }, 3000);
+function showToast(m, type="info") {
+    const t = document.createElement('div');
+    t.className = `toast toast-${type}`;
+    t.textContent = m;
+    dom.toastContainer.appendChild(t);
+    setTimeout(() => { t.style.opacity="0"; setTimeout(() => t.remove(), 400); }, 3000);
 }
 
-function initTheme() {
-    const theme = localStorage.getItem('behnke_theme') || 'light';
-    document.body.classList.toggle('dark-mode', theme === 'dark');
-}
-
-function toggleTheme() {
+function rotateTheme() {
     const isDark = document.body.classList.toggle('dark-mode');
     localStorage.setItem('behnke_theme', isDark ? 'dark' : 'light');
+}
+function initTheme() {
+    if (localStorage.getItem('behnke_theme') === 'dark') document.body.classList.add('dark-mode');
 }

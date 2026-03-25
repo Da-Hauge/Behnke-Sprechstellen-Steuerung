@@ -3,55 +3,69 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Behnke Master-Steuerung</title>
+    <title>Behnke Dashboard</title>
     <link rel="stylesheet" href="style.css">
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
 </head>
 <body>
-    <header class="app-header">
-        <div class="station-info">
-            <span class="label">Aktive Station:</span>
-            <strong id="currentStationName">Bitte wählen</strong>
+
+    <header class="main-header">
+        <div class="header-left">
+            <span class="material-icons info-icon">router</span>
+            <div>
+                <small>Aktive Sprechstelle</small>
+                <div id="currentStationName">Bitte wählen...</div>
+            </div>
         </div>
-        <div class="nav-controls">
+        <div class="header-right">
             <select id="stationSwitcher">
-                <option value="" disabled selected>Station wechseln...</option>
-                <option value="192.168.104.191">Altbau neue Pforte (191)</option> 
-                <option value="192.168.104.192">Altbau neue Pforte (192)</option> 
-                <option value="192.168.104.193">Neubau Pforte (193)</option> 
+                <option value="" disabled selected>Station wählen</option>
+                <option value="192.168.104.191">Altbau 191</option> 
+                <option value="192.168.104.192">Altbau 192</option> 
+                <option value="192.168.104.193">Neubau 193</option> 
             </select>
-            <button id="themeToggle" class="icon-btn"><span class="material-icons">brightness_2</span></button>
+            <button id="themeToggle" class="icon-btn"><span class="material-icons">brightness_medium</span></button>
         </div>
     </header>
 
-    <div class="container" id="mainContent" style="display: none;">
-        <div class="card">
-            <div class="status-badge" id="relayStatusField">Relais: Unbekannt</div>
-            
-            <div class="form-group">
-                <label>Admin-Passwort für diese IP:</label>
-                <input type="password" id="stationPwd" placeholder="Passwort für diese Station">
+    <main class="container" id="mainContent" style="visibility: hidden;">
+        <div class="status-grid">
+            <div class="status-card">
+                <label>Systemstatus</label>
+                <div id="systemStatus" class="status-value">Bereit</div>
+            </div>
+            <div class="status-card">
+                <label>Relais 1</label>
+                <div id="relayStatus" class="status-value relay-unbekannt">Unbekannt</div>
+            </div>
+        </div>
+
+        <div class="control-card">
+            <div class="input-section">
+                <label for="stationPwd">Administrator-Passwort</label>
+                <input type="password" id="stationPwd" placeholder="Passwort für diese IP">
             </div>
 
-            <div class="control-section">
-                <h3>Türsteuerung</h3>
-                
-                <button id="triggerBtn" class="btn-main">
-                    <span class="material-icons">lock_open</span>
+            <div class="action-section">
+                <button id="triggerBtn" class="btn-trigger">
+                    <span class="material-icons">timer</span>
                     <span id="triggerText">Temporär öffnen</span>
-                    <div id="countdownBar" class="progress-bar"></div>
+                    <div id="progress" class="btn-progress"></div>
                 </button>
 
-                <div class="toggle-container">
-                    <span>Dauerhaft öffnen</span>
+                <div class="permanent-box">
+                    <div class="perm-text">
+                        <strong>Dauerhaft öffnen</strong>
+                        <p>Simulation durch Auto-Trigger</p>
+                    </div>
                     <label class="switch">
                         <input type="checkbox" id="permanentToggle">
-                        <span class="slider round"></span>
+                        <span class="slider"></span>
                     </label>
                 </div>
             </div>
         </div>
-    </div>
+    </main>
 
     <div id="toastContainer" class="toast-container"></div>
 
