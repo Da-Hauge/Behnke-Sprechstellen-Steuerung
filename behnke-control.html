@@ -116,7 +116,7 @@
         statusDisplay.innerText = "Verbinde...";
 
         // URL Zusammenbau für SSE mit CORS und EVENTSOURCE nach Doku
-        const sseUrl = `https://${ip}:8443/?key=${encodeURIComponent(pwd)}&sse&cors&eventsource&access_state_1&relay_contact_1`;
+        const sseUrl = `https://${ip}:8443/?key=${encodeURIComponent(pwd)}&sse&state`;
 
         sseSource = new EventSource(sseUrl);
 
