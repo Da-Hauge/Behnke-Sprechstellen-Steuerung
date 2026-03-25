@@ -11,6 +11,9 @@ const STATUS_MAP = {
     OPEN: 'auf',
     CLOSED: 'zu'
 };
+const THEME_KEY = 'behnke_theme';
+const THEME_LIGHT = 'light';
+const THEME_DARK = 'dark';
 
 // Polling für aktuellen Zustand
 const ACCESS_STATE_POLL_DELAY_MS = 100;
@@ -28,6 +31,7 @@ let sseConnection = null;
 function initApp() {
     cacheElements();
     loadPassword();
+    initTheme();
     bindEvents();
 }
 
@@ -38,6 +42,8 @@ function cacheElements() {
     domCache.ipSelect = document.getElementById('ipSelect');
     domCache.adminPwd = document.getElementById('adminPwd');
     domCache.statusDisplay = document.getElementById('statusDisplay');
+    domCache.themeToggle = document.getElementById('themeToggle');
+    domCache.themeIcon = document.querySelector('.theme-icon');
 }
 
 /**
@@ -49,6 +55,49 @@ function loadPassword() {
 }
 
 /**
+ * Initialisiert das Theme basierend auf gespeicherten Einstellungen oder Systempräferenz
+ */
+function initTheme() {
+    const savedTheme = localStorage.getItem(THEME_KEY);
+    const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    
+    let theme = savedTheme;
+    if (!theme) {
+        theme = systemPrefersDark ? THEME_DARK : THEME_LIGHT;
+    }
+    
+    applyTheme(theme);
+}
+
+/**
+ * Wendet das angegebene Theme an
+ * @param {string} theme - 'light' oder 'dark'
+ */
+function applyTheme(theme) {
+    const body = document.body;
+    const icon = domCache.themeIcon;
+    
+    if (theme === THEME_DARK) {
+        body.classList.add('dark-mode');
+        if (icon) icon.textContent = 'wb_sunny';
+    } else {
+        body.classList.remove('dark-mode');
+        if (icon) icon.textContent = 'brightness_2';
+    }
+    
+    localStorage.setItem(THEME_KEY, theme);
+}
+
+/**
+ * Schaltet zwischen Hell- und Dunkelmodus um
+ */
+function toggleTheme() {
+    const isDark = document.body.classList.contains('dark-mode');
+    const newTheme = isDark ? THEME_LIGHT : THEME_DARK;
+    applyTheme(newTheme);
+}
+
+/**
  * Bindet Event-Listener an Buttons (falls IDs vorhanden)
  */
 function bindEvents() {
@@ -57,6 +106,9 @@ function bindEvents() {
     }
     if (domCache.adminPwd) {
         domCache.adminPwd.addEventListener('input', scheduleAccessStateQuery);
+    }
+    if (domCache.themeToggle) {
+        domCache.themeToggle.addEventListener('click', toggleTheme);
     }
 }
 
