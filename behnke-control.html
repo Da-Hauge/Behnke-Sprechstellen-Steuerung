@@ -115,29 +115,29 @@
 
         statusDisplay.innerText = "Verbinde...";
 
-        // URL Zusammenbau für SSE mit CORS und EVENTSOURCE nach Doku
+        let tried = false;
         const sseUrl = `https://${ip}:8443/?key=${encodeURIComponent(pwd)}&sse&state`;
-
         sseSource = new EventSource(sseUrl);
 
-        sseSource.onmessage = function(event) {
-            console.log("SSE Event:", event.data);
-            
-            // Ausgabe filtern und schön anzeigen
-            if (event.data.includes("access_state_1") || event.data.includes("relay_contact_1")) {
-                 statusDisplay.innerText = event.data;
-            } else if (event.data.includes("SSE_WELCOME")) {
-                 statusDisplay.innerText = "Verbunden. Warte auf Statusänderung...";
-            } else if (event.data.includes("SSE_TOO_MANY_CONNECTIONS")) {
-                 statusDisplay.innerText = "Fehler: Zu viele Verbindungen zur Station!";
-                 sseSource.close();
+        sseSource.onopen = () => {
+            statusDisplay.innerText = "SSE verbunden";
+        };
+
+        sseSource.onmessage = (event) => {
+            statusDisplay.innerText = "SSE: " + event.data;
+            if (event.data.includes("SSE_BYE")) {
+                sseSource.close();
+                setTimeout(connectSSE, 500);
             }
         };
 
-        sseSource.onerror = function(err) {
-            console.error("SSE Fehler:", err);
-            statusDisplay.innerText = "Verbindungsfehler (Überprüfe IP und Passwort)";
-            sseSource.close();
+        sseSource.onerror = () => {
+            if (sseSource.readyState === EventSource.CLOSED) {
+                statusDisplay.innerText = "SSE getrennt, reconnect...";
+                setTimeout(connectSSE, 1000);
+            } else {
+                statusDisplay.innerText = "SSE Fehler (wiederholen...)";
+            }
         };
     }
 </script>
