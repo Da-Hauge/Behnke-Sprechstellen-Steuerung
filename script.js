@@ -1,93 +1,187 @@
-let sseSource = null;
+// script2.js - Performante und saubere Implementierung der Sprechstellensteuerung
 
-// Lade gespeichertes Passwort beim Start
-window.onload = function() {
-    const savedPwd = localStorage.getItem('behnke_pwd');
-    if (savedPwd) {
-        document.getElementById('adminPwd').value = savedPwd;
-    }
+// Konstanten für bessere Wartbarkeit
+const API_ENDPOINT = '/';
+const SSE_ENDPOINT = ':8443/';
+const COMMANDS = {
+    TEMP_AUF: 'trigger&relay=1',
+    HELP: 'help'
+};
+const STATUS_MAP = {
+    OPEN: 'auf',
+    CLOSED: 'zu'
 };
 
-// Passwort lokal im Browser speichern
-function savePassword() {
-    const pwd = document.getElementById('adminPwd').value;
-    localStorage.setItem('behnke_pwd', pwd);
-    connectSSE(); // Bei Passwortänderung SSE neu verbinden
+// Cache für DOM-Elemente zur Performance
+const domCache = {};
+
+// SSE-Verbindung
+let sseConnection = null;
+
+/**
+ * Initialisiert die Anwendung nach DOM-Load
+ */
+function initApp() {
+    cacheElements();
+    loadPassword();
+    bindEvents();
 }
 
-// HTTP-API Befehl senden
-function sendCommand(action) {
-    const ip = document.getElementById('ipSelect').value;
-    const pwd = document.getElementById('adminPwd').value;
+/**
+ * Cached häufig verwendete DOM-Elemente
+ */
+function cacheElements() {
+    domCache.ipSelect = document.getElementById('ipSelect');
+    domCache.adminPwd = document.getElementById('adminPwd');
+    domCache.statusDisplay = document.getElementById('statusDisplay');
+    domCache.tempAufBtn = document.getElementById('tempAufBtn');
+    domCache.dauerAufBtn = document.getElementById('dauerAufBtn');
+    domCache.dauerZuBtn = document.getElementById('dauerZuBtn');
+    domCache.savePwdBtn = document.getElementById('savePwdBtn');
+}
+
+/**
+ * Lädt gespeichertes Passwort aus localStorage
+ */
+function loadPassword() {
+    const pwd = localStorage.getItem('behnke_pwd');
+    if (pwd) domCache.adminPwd.value = pwd;
+}
+
+/**
+ * Bindet Event-Listener an Buttons
+ */
+function bindEvents() {
+    domCache.savePwdBtn?.addEventListener('click', handleSavePassword);
+    domCache.tempAufBtn?.addEventListener('click', () => sendApiCommand(COMMANDS.TEMP_AUF));
+    domCache.dauerAufBtn?.addEventListener('click', () => sendApiCommand(COMMANDS.HELP));
+    domCache.dauerZuBtn?.addEventListener('click', () => sendApiCommand(COMMANDS.HELP));
+}
+
+/**
+ * Speichert Passwort und startet SSE neu
+ */
+function handleSavePassword() {
+    const pwd = domCache.adminPwd.value.trim();
+    if (!pwd) {
+        alert('Passwort erforderlich');
+        return;
+    }
+    localStorage.setItem('behnke_pwd', pwd);
+    startSSE();
+}
+
+/**
+ * Sendet API-Befehl asynchron
+ * @param {string} command - Der API-Befehl
+ */
+async function sendApiCommand(command) {
+    const ip = domCache.ipSelect.value.trim();
+    const pwd = domCache.adminPwd.value.trim();
 
     if (!ip || !pwd) {
-        alert("Bitte IP-Adresse und Passwort angeben.");
+        alert('IP und Passwort erforderlich');
         return;
     }
 
-    let apiCommand = "";
+    const url = `https://${ip}${API_ENDPOINT}?key=${encodeURIComponent(pwd)}&api=${command}`;
 
-    // API Befehle exakt nach Dokumentation zuweisen
-    if (action === 'temp_auf') {
-        apiCommand = "trigger&relay=1";
-    } else if (action === 'dauer_auf') {
-        apiCommand = "set&ACCESS_STATE_1=OPEN";
-    } else if (action === 'dauer_zu') {
-        apiCommand = "set&ACCESS_STATE_1=CLOSED";
+    try {
+        await fetch(url, { method: 'GET', mode: 'no-cors' });
+        console.log(`Befehl gesendet: ${command}`);
+    } catch (error) {
+        console.error('API-Fehler:', error);
     }
-
-    const url = `https://${ip}/?key=${encodeURIComponent(pwd)}&api=${apiCommand}`;
-
-    fetch(url, { method: 'GET', mode: 'no-cors' })
-        .then(() => console.log(`Befehl ${apiCommand} gesendet.`))
-        .catch(err => console.error("Fehler beim Senden:", err));
 }
 
-function parseStatusFromSSE(text) {
-    const statusDisplay = document.getElementById('statusDisplay');
-    const t = text.trim();
+/**
+ * Startet SSE-Verbindung
+ */
+function startSSE() {
+    const ip = domCache.ipSelect.value.trim();
+    const pwd = domCache.adminPwd.value.trim();
 
-    if (/^TEMP_RELAY_CONTACT_1\s+(OPEN|CLOSED)$/i.test(t)) {
-        const m = t.match(/^TEMP_RELAY_CONTACT_1\s+(OPEN|CLOSED)$/i);
-        statusDisplay.innerText = "Status: " + m[1].toUpperCase();
+    if (!ip || !pwd) {
+        updateStatus('Eingabe erforderlich');
+        return;
+    }
+
+    // Schließe bestehende Verbindung
+    if (sseConnection) {
+        sseConnection.close();
+    }
+
+    updateStatus('Verbinde...');
+
+    const sseUrl = `https://${ip}${SSE_ENDPOINT}?key=${encodeURIComponent(pwd)}&sse&all&cors`;
+    sseConnection = new EventSource(sseUrl);
+
+    sseConnection.onopen = () => updateStatus('Verbunden (warte auf Status...)');
+
+    sseConnection.onmessage = (event) => {
+        const data = event.data.trim();
+        if (parseSSEStatus(data)) return;
+        if (/SSE_KEEP_ALIVE/i.test(data)) return;
+        updateStatus(`SSE: ${data}`);
+        if (/SSE_BYE/i.test(data)) {
+            sseConnection.close();
+            setTimeout(startSSE, 500);
+        }
+    };
+
+    sseConnection.onerror = () => {
+        if (sseConnection.readyState === EventSource.CLOSED) {
+            updateStatus('Getrennt, reconnect...');
+            setTimeout(startSSE, 1000);
+        } else {
+            updateStatus('Verbindungsfehler');
+        }
+    };
+}
+
+/**
+ * Parst Status aus SSE-Daten
+ * @param {string} data - SSE-Nachricht
+ * @returns {boolean} - True wenn Status geparst
+ */
+function parseSSEStatus(data) {
+    const relayMatch = data.match(/^TEMP_RELAY_CONTACT_1\s+(OPEN|CLOSED)$/i);
+    if (relayMatch) {
+        updateStatus(`Status: ${STATUS_MAP[relayMatch[1].toUpperCase()]}`);
         return true;
     }
 
-    if (/^TEMP_ACCESS_STATE_1\s+(FREE|CLOSED)$/i.test(t)) {
-        const m = t.match(/^TEMP_ACCESS_STATE_1\s+(FREE|CLOSED)$/i);
-        statusDisplay.innerText = "Status: " + (m[1].toUpperCase() === 'FREE' ? 'OPEN' : 'CLOSED');
+    const accessMatch = data.match(/^TEMP_ACCESS_STATE_1\s+(FREE|CLOSED)$/i);
+    if (accessMatch) {
+        const state = accessMatch[1].toUpperCase() === 'FREE' ? 'OPEN' : 'CLOSED';
+        updateStatus(`Status: ${STATUS_MAP[state]}`);
         return true;
     }
 
-    if (/^STATE_ACCESS$/i.test(t)) {
-        statusDisplay.innerText = "Status: OPEN (STATE_ACCESS)";
+    if (/^STATE_ACCESS$/i.test(data)) {
+        updateStatus('Status: auf');
+        return true;
+    }
+    if (/^STATE_RUN$/i.test(data)) {
+        updateStatus('Status: zu');
         return true;
     }
 
-    if (/^STATE_RUN$/i.test(t)) {
-        statusDisplay.innerText = "Status: CLOSED (STATE_RUN)";
-        return true;
-    }
-
+    // Vereinfachte Patterns
     const patterns = [
         /access_state_1\s*=\s*(\w+)/i,
         /relay_contact_1\s*=\s*(\w+)/i,
-        /state\s*=\s*(\w+)/i,
-        /sse_state\s*=\s*(\w+)/i
+        /state\s*=\s*(\w+)/i
     ];
 
-    for (const pat of patterns) {
-        const m = t.match(pat);
-        if (m) {
-            const raw = m[1].toUpperCase();
-            let shown = raw;
-
-            if (/relay_contact_1/i.test(pat.source)) {
-                if (raw === '1') shown = 'CLOSED';
-                else if (raw === '0') shown = 'OPEN';
+    for (const pattern of patterns) {
+        const match = data.match(pattern);
+        if (match) {
+            let status = match[1].toUpperCase();
+            if (/relay_contact_1/i.test(pattern.source)) {
+                status = status === '1' ? 'CLOSED' : 'OPEN';
             }
-
-            statusDisplay.innerText = "Status: " + shown;
+            updateStatus(`Status: ${STATUS_MAP[status] || status}`);
             return true;
         }
     }
@@ -95,56 +189,15 @@ function parseStatusFromSSE(text) {
     return false;
 }
 
-// SSE API für den Status abonnieren
-function connectSSE() {
-    const ip = document.getElementById('ipSelect').value;
-    const pwd = document.getElementById('adminPwd').value;
-    const statusDisplay = document.getElementById('statusDisplay');
-
-    if (sseSource) {
-        sseSource.close();
-        sseSource = null;
+/**
+ * Aktualisiert Status-Anzeige
+ * @param {string} text - Status-Text
+ */
+function updateStatus(text) {
+    if (domCache.statusDisplay) {
+        domCache.statusDisplay.textContent = text;
     }
-
-    if (!ip || !pwd) {
-        statusDisplay.innerText = "Warte auf Eingabe...";
-        return;
-    }
-
-    statusDisplay.innerText = "Verbinde...";
-
-    const sseUrl = `https://${ip}:8443/?key=${encodeURIComponent(pwd)}&sse&all&cors`;
-    sseSource = new EventSource(sseUrl);
-
-    sseSource.onopen = () => {
-        statusDisplay.innerText = "SSE verbunden (warte auf Status)...";
-    };
-
-    sseSource.onmessage = (event) => {
-        const eventText = event.data.trim();
-
-        if (parseStatusFromSSE(eventText)) {
-            return;
-        }
-
-        if (/SSE_KEEP_ALIVE/i.test(eventText)) {
-            return;
-        }
-
-        statusDisplay.innerText = "SSE: " + eventText;
-
-        if (/SSE_BYE/i.test(eventText)) {
-            sseSource.close();
-            setTimeout(connectSSE, 500);
-        }
-    };
-
-    sseSource.onerror = () => {
-        if (sseSource.readyState === EventSource.CLOSED) {
-            statusDisplay.innerText = "SSE getrennt, reconnect...";
-            setTimeout(connectSSE, 1000);
-        } else {
-            statusDisplay.innerText = "SSE Fehler (wiederholen...)";
-        }
-    };
 }
+
+// Starte App beim DOM-Load
+document.addEventListener('DOMContentLoaded', initApp);
