@@ -94,7 +94,7 @@ function startAutoTrigger() {
     // Alle 5 Sekunden einen neuen Impuls senden, um das Tor offen zu halten
     autoTriggerInterval = setInterval(() => {
         sendCommand(COMMANDS.TEMP_AUF);
-    }, 5000); 
+    }, 2000); 
 }
 
 function stopAutoTrigger() {
