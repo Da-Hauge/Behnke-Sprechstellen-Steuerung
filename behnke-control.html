@@ -97,8 +97,38 @@
             .catch(err => console.error("Fehler beim Senden:", err));
     }
 
+    function parseStatusFromSSE(text) {
+        const statusDisplay = document.getElementById('statusDisplay');
+        const t = text.trim();
+
+        const patterns = [
+            /access_state_1\s*=\s*(\w+)/i,
+            /relay_contact_1\s*=\s*(\w+)/i,
+            /state\s*=\s*(\w+)/i,
+            /sse_state\s*=\s*(\w+)/i
+        ];
+
+        for (const pat of patterns) {
+            const m = t.match(pat);
+            if (m) {
+                const raw = m[1].toUpperCase();
+                let shown = raw;
+
+                if (/relay_contact_1/i.test(pat.source)) {
+                    if (raw === '1') shown = 'CLOSED';
+                    else if (raw === '0') shown = 'OPEN';
+                }
+
+                statusDisplay.innerText = "Status: " + shown;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     // SSE API für den Status abonnieren
-    function connectSSE() {
+    function connectSSE () {
         const ip = document.getElementById('ipSelect').value;
         const pwd = document.getElementById('adminPwd').value;
         const statusDisplay = document.getElementById('statusDisplay');
@@ -115,17 +145,28 @@
 
         statusDisplay.innerText = "Verbinde...";
 
-        let tried = false;
-        const sseUrl = `https://${ip}:8443/?key=${encodeURIComponent(pwd)}&sse&state&cors`;
+        const sseUrl = `https://${ip}:8443/?key=${encodeURIComponent(pwd)}&sse&all&cors`;
         sseSource = new EventSource(sseUrl);
 
         sseSource.onopen = () => {
-            statusDisplay.innerText = "SSE verbunden";
+            statusDisplay.innerText = "SSE verbunden (warte auf Status)...";
         };
 
         sseSource.onmessage = (event) => {
-            statusDisplay.innerText = "SSE: " + event.data;
-            if (event.data.includes("SSE_BYE")) {
+            const eventText = event.data.trim();
+
+            if (parseStatusFromSSE(eventText)) {
+                return;
+            }
+
+            if (/SSE_KEEP_ALIVE/i.test(eventText)) {
+                // Keep-Alive ignorieren
+                return;
+            }
+
+            statusDisplay.innerText = "SSE: " + eventText;
+
+            if (/SSE_BYE/i.test(eventText)) {
                 sseSource.close();
                 setTimeout(connectSSE, 500);
             }
