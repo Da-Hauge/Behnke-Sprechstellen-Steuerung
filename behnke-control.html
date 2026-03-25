@@ -84,11 +84,9 @@
         if (action === 'temp_auf') {
             apiCommand = "trigger&relay=1"; // Relais 1 auslösen
         } else if (action === 'dauer_auf') {
-            // HINWEIS: Ersetze "OPTIONSNAME" durch die genaue Variable deiner Anlage
-            apiCommand = "set&OPTIONSNAME=1"; 
+            apiCommand = "set&ACCESS_STATE_1=OPEN";
         } else if (action === 'dauer_zu') {
-            // HINWEIS: Ersetze "OPTIONSNAME" durch die genaue Variable deiner Anlage
-            apiCommand = "set&OPTIONSNAME=0"; 
+            apiCommand = "set&ACCESS_STATE_1=CLOSED";
         }
 
         // URL Zusammenbau für API
