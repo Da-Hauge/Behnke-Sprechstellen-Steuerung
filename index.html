@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Behnke Sprechstellen-Steuerung</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="container">
+    <h1>Behnke Sprechstellen-Steuerung</h1>
+    
+    <div class="form-group">
+        <label for="ipSelect">Sprechstelle (IP-Adresse) auswählen:</label>
+        <select id="ipSelect" onchange="connectSSE()">
+            <option value="">-- Bitte wählen --</option>
+            <option value="192.168.104.191">Altbau neue Pforte (192.168.104.191)</option> <option value="192.168.104.192">Altbau neue Pforte (192.168.104.192)</option> <option value="192.168.104.193">Neubau Pforte (192.168.104.193)</option> </select>
+    </div>
+
+    <div class="form-group">
+        <label for="adminPwd">Administrator-Passwort:</label>
+        <input type="password" id="adminPwd" placeholder="Passwort eingeben" onchange="savePassword()">
+    </div>
+
+    <div class="status-box">
+        Aktueller Status (Relais 1): <br>
+        <span class="status-indicator" id="statusDisplay">Verbinde...</span>
+    </div>
+
+    <div class="btn-group">
+        <button class="btn-temp" onclick="sendCommand('temp_auf')">Temporär Auf</button>
+        <button class="btn-open" onclick="sendCommand('dauer_auf')">Dauerhaft Auf</button>
+        <button class="btn-close" onclick="sendCommand('dauer_zu')">Dauerhaft Zu</button>
+    </div>
+</div>
+
+<script src="script.js" defer></script>
+</body>
+</html>
