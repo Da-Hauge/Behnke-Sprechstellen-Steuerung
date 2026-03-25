@@ -3,45 +3,58 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Behnke Sprechstellen-Steuerung</title>
+    <title>Behnke Master-Steuerung</title>
     <link rel="stylesheet" href="style.css">
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
 </head>
 <body>
-    <button id="themeToggle" class="theme-toggle" aria-label="Dark Mode umschalten">
-        <span class="theme-icon material-icons">brightness_2</span>
-    </button>
+    <header class="app-header">
+        <div class="station-info">
+            <span class="label">Aktive Station:</span>
+            <strong id="currentStationName">Bitte wählen</strong>
+        </div>
+        <div class="nav-controls">
+            <select id="stationSwitcher">
+                <option value="" disabled selected>Station wechseln...</option>
+                <option value="192.168.104.191">Altbau neue Pforte (191)</option> 
+                <option value="192.168.104.192">Altbau neue Pforte (192)</option> 
+                <option value="192.168.104.193">Neubau Pforte (193)</option> 
+            </select>
+            <button id="themeToggle" class="icon-btn"><span class="material-icons">brightness_2</span></button>
+        </div>
+    </header>
 
-<div class="container">
-    <h1 id="mainTitle">Behnke Sprechstellen-Steuerung</h1>
-    
-    <div class="form-group">
-        <label for="ipSelect" id="ipSelectLabel">Sprechstelle (IP-Adresse) auswählen:</label>
-        <select id="ipSelect">
-            <option value="">-- Bitte wählen --</option>
-            <option value="192.168.104.191">Altbau neue Pforte (192.168.104.191)</option> 
-            <option value="192.168.104.192">Altbau neue Pforte (192.168.104.192)</option> 
-            <option value="192.168.104.193">Neubau Pforte (192.168.104.193)</option> 
-        </select>
+    <div class="container" id="mainContent" style="display: none;">
+        <div class="card">
+            <div class="status-badge" id="relayStatusField">Relais: Unbekannt</div>
+            
+            <div class="form-group">
+                <label>Admin-Passwort für diese IP:</label>
+                <input type="password" id="stationPwd" placeholder="Passwort für diese Station">
+            </div>
+
+            <div class="control-section">
+                <h3>Türsteuerung</h3>
+                
+                <button id="triggerBtn" class="btn-main">
+                    <span class="material-icons">lock_open</span>
+                    <span id="triggerText">Temporär öffnen</span>
+                    <div id="countdownBar" class="progress-bar"></div>
+                </button>
+
+                <div class="toggle-container">
+                    <span>Dauerhaft öffnen</span>
+                    <label class="switch">
+                        <input type="checkbox" id="permanentToggle">
+                        <span class="slider round"></span>
+                    </label>
+                </div>
+            </div>
+        </div>
     </div>
 
-    <div class="form-group">
-        <label for="adminPwd" id="pwdLabel">Administrator-Passwort:</label>
-        <input type="password" id="adminPwd" placeholder="Passwort eingeben">
-    </div>
+    <div id="toastContainer" class="toast-container"></div>
 
-    <div class="status-box" id="statusBox">
-        Aktueller Status (Relais 1): <br>
-        <span class="status-indicator" id="statusDisplay">Warte auf Eingabe...</span>
-    </div>
-
-    <div class="btn-group">
-        <button id="btnTemp" class="btn-temp">Temporär Auf</button>
-        <button id="btnOpen" class="btn-open">Dauerhaft Auf</button>
-        <button id="btnClose" class="btn-close">Dauerhaft Zu</button>
-    </div>
-</div>
-
-<script src="script.js" defer></script>
+    <script src="script.js"></script>
 </body>
 </html>

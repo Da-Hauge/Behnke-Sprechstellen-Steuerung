@@ -1,100 +1,113 @@
-// script.js - Behnke Steuerung (Deutsch, mit Auto-Trigger Workaround)
+// script.js - Behnke Master-Steuerung
 
 const API_ENDPOINT = '/';
-const SSE_ENDPOINT = ':8443/';
-
-const COMMANDS = {
-    TEMP_AUF: 'api=trigger&relay=1',
-    GET_STATE: 'api=get&access_state_1'
+const STATIONS = {
+    "192.168.104.191": "Altbau neue Pforte (191)",
+    "192.168.104.192": "Altbau neue Pforte (192)",
+    "192.168.104.193": "Neubau Pforte (193)"
 };
 
-const messages = {
-    waiting: 'Warte auf Eingabe...',
-    connecting: 'Verbinde...',
-    connected: 'Verbunden',
-    commandSent: 'Befehl gesendet!',
-    statusOpen: 'Status: Dauerhaft AUF (Simuliert)',
-    statusTemp: 'Status: Kurzzeitig AUF',
-    statusClosed: 'Status: ZU / Normalbetrieb',
-    error: 'Verbindungsfehler'
-};
-
-const domCache = {};
+let currentIP = "";
 let autoTriggerInterval = null;
 let sseConnection = null;
+let countdownTimer = null;
+
+const dom = {
+    switcher: document.getElementById('stationSwitcher'),
+    nameDisplay: document.getElementById('currentStationName'),
+    content: document.getElementById('mainContent'),
+    pwdInput: document.getElementById('stationPwd'),
+    triggerBtn: document.getElementById('triggerBtn'),
+    triggerText: document.getElementById('triggerText'),
+    countdownBar: document.getElementById('countdownBar'),
+    permanentToggle: document.getElementById('permanentToggle'),
+    statusField: document.getElementById('relayStatusField'),
+    toastContainer: document.getElementById('toastContainer'),
+    themeToggle: document.getElementById('themeToggle')
+};
 
 // Initialisierung
 document.addEventListener('DOMContentLoaded', () => {
-    cacheElements();
-    loadPassword();
     initTheme();
-    bindEvents();
-    
-    // Falls IP und Passwort bereits vorhanden sind, SSE starten
-    if (domCache.ipSelect.value && domCache.adminPwd.value) {
-        startSSE();
-    }
+    dom.switcher.addEventListener('change', (e) => loadStation(e.target.value));
+    dom.pwdInput.addEventListener('change', savePasswordForIP);
+    dom.triggerBtn.addEventListener('click', handleTrigger);
+    dom.permanentToggle.addEventListener('change', handlePermanentToggle);
+    dom.themeToggle.addEventListener('click', toggleTheme);
 });
 
-function cacheElements() {
-    domCache.ipSelect = document.getElementById('ipSelect');
-    domCache.adminPwd = document.getElementById('adminPwd');
-    domCache.statusDisplay = document.getElementById('statusDisplay');
-    domCache.themeToggle = document.getElementById('themeToggle');
-    domCache.themeIcon = document.querySelector('.theme-icon');
-    domCache.tempBtn = document.getElementById('btnTemp');
-    domCache.openBtn = document.getElementById('btnOpen');
-    domCache.closeBtn = document.getElementById('btnClose');
+function loadStation(ip) {
+    // Reset
+    stopAutoTrigger();
+    if (sseConnection) sseConnection.close();
+    
+    currentIP = ip;
+    dom.nameDisplay.textContent = STATIONS[ip];
+    dom.content.style.display = 'block';
+    
+    // Passwort für diese IP laden
+    const savedPwd = localStorage.getItem(`behnke_pwd_${ip}`);
+    dom.pwdInput.value = savedPwd || "";
+    
+    // UI zurücksetzen
+    dom.permanentToggle.checked = false;
+    updateStatusField('Verbunden', 'neutral');
+    
+    showToast(`${STATIONS[ip]} ausgewählt`, 'info');
+    startSSE();
 }
 
-function bindEvents() {
-    // Wenn IP gewechselt wird
-    domCache.ipSelect.addEventListener('change', () => {
-        stopAutoTrigger();
-        startSSE();
-    });
+function savePasswordForIP() {
+    if (currentIP) {
+        localStorage.setItem(`behnke_pwd_${currentIP}`, dom.pwdInput.value);
+        showToast("Passwort gespeichert", "success");
+        startSSE(); // Reconnect mit neuem PW
+    }
+}
 
-    // Passwort speichern
-    domCache.adminPwd.addEventListener('input', () => {
-        localStorage.setItem('behnke_pwd', domCache.adminPwd.value);
-    });
+// --- AKTIONEN ---
 
-    // --- BUTTON LOGIK ---
+async function handleTrigger() {
+    if (dom.triggerBtn.classList.contains('active')) return;
 
-    // 1. Temporär Auf
-    domCache.tempBtn.addEventListener('click', () => {
-        stopAutoTrigger(); // Falls Dauerlauf an war, stoppen
-        updateStatus('statusTemp');
-        sendCommand(COMMANDS.TEMP_AUF);
-    });
+    const ok = await sendCommand('api=trigger&relay=1');
+    if (ok) {
+        showToast("Tür wird für 5s geöffnet", "success");
+        startCountdown();
+    }
+}
 
-    // 2. Dauerhaft Auf (Simulation)
-    domCache.openBtn.addEventListener('click', () => {
+function startCountdown() {
+    dom.triggerBtn.classList.add('active');
+    dom.triggerText.textContent = "Geöffnet...";
+    dom.countdownBar.style.width = '100%';
+
+    // Animation der Bar
+    setTimeout(() => dom.countdownBar.style.width = '0%', 10);
+
+    setTimeout(() => {
+        dom.triggerBtn.classList.remove('active');
+        dom.triggerText.textContent = "Temporär öffnen";
+    }, 5000);
+}
+
+function handlePermanentToggle() {
+    if (dom.permanentToggle.checked) {
         startAutoTrigger();
-    });
-
-    // 3. Dauerhaft Zu (Stoppt Simulation)
-    domCache.btnClose.addEventListener('click', () => {
+        showToast("Daueröffnung aktiviert", "warning");
+    } else {
         stopAutoTrigger();
-        updateStatus('statusClosed');
-    });
-
-    domCache.themeToggle.addEventListener('click', toggleTheme);
+        showToast("Daueröffnung deaktiviert", "info");
+    }
 }
-
-// --- LOGIK FÜR DIE SIMULATION (Dauerhaft Auf) ---
 
 function startAutoTrigger() {
-    if (autoTriggerInterval) return; // Läuft bereits
-
-    updateStatus('statusOpen');
-    // Ersten Impuls sofort senden
-    sendCommand(COMMANDS.TEMP_AUF);
-
-    // Alle 5 Sekunden einen neuen Impuls senden, um das Tor offen zu halten
+    if (autoTriggerInterval) return;
+    sendCommand('api=trigger&relay=1');
     autoTriggerInterval = setInterval(() => {
-        sendCommand(COMMANDS.TEMP_AUF);
-    }, 2000); 
+        sendCommand('api=trigger&relay=1');
+    }, 5000);
+    updateStatusField('DAUERHAFT OFFEN', 'open');
 }
 
 function stopAutoTrigger() {
@@ -102,95 +115,72 @@ function stopAutoTrigger() {
         clearInterval(autoTriggerInterval);
         autoTriggerInterval = null;
     }
+    updateStatusField('Normalbetrieb', 'neutral');
 }
 
-// --- HARDWARE KOMMUNIKATION ---
+// --- KOMMUNIKATION ---
 
-async function sendCommand(commandString) {
-    const ip = domCache.ipSelect.value;
-    const pwd = domCache.adminPwd.value;
-    
-    if (!ip || !pwd) return;
+async function sendCommand(cmd) {
+    const pwd = dom.pwdInput.value;
+    if (!currentIP || !pwd) {
+        showToast("Passwort fehlt!", "error");
+        return false;
+    }
 
-    // Wir senden &cors mit, damit das Gerät weiß, dass es antworten darf (falls konfiguriert)
-    const url = `https://${ip}${API_ENDPOINT}?key=${encodeURIComponent(pwd)}&${commandString}&cors`;
-
+    const url = `https://${currentIP}/?key=${encodeURIComponent(pwd)}&${cmd}&cors`;
     try {
-        // mode: 'no-cors' ist entscheidend, damit der Browser den Befehl trotz CORS-Sperre abschickt
-        await fetch(url, { 
-            mode: 'no-cors',
-            cache: 'no-cache'
-        });
-        
-        // Visuelles Feedback nur, wenn nicht im Dauer-Modus
-        if (!autoTriggerInterval) {
-            domCache.statusDisplay.style.color = '#007bff';
-        }
-    } catch (error) {
-        console.error('Send Error:', error);
+        await fetch(url, { mode: 'no-cors' });
+        return true;
+    } catch (e) {
+        showToast("Verbindungsfehler", "error");
+        return false;
     }
 }
 
 function startSSE() {
-    const ip = domCache.ipSelect.value;
-    const pwd = domCache.adminPwd.value;
-    if (!ip || !pwd) return;
+    const pwd = dom.pwdInput.value;
+    if (!currentIP || !pwd) return;
 
     if (sseConnection) sseConnection.close();
     
-    const sseUrl = `https://${ip}:8443/?key=${encodeURIComponent(pwd)}&sse&all&cors`;
-    
-    try {
-        sseConnection = new EventSource(sseUrl);
-        sseConnection.onopen = () => {
-            if (!autoTriggerInterval) updateStatus('connected');
-        };
-        sseConnection.onmessage = (event) => {
-            const data = event.data.trim();
-            // Nur Status updaten, wenn wir NICHT gerade im simulierten Dauer-Modus sind
-            if (!autoTriggerInterval) {
-                if (data.includes('FREE') || data.includes('OPEN')) updateStatus('statusOpen');
-                if (data.includes('CLOSED')) updateStatus('statusClosed');
-            }
-        };
-        sseConnection.onerror = () => {
-            sseConnection.close();
-            setTimeout(startSSE, 5000);
-        };
-    } catch (e) {
-        console.error("SSE Error");
-    }
+    const sseUrl = `https://${currentIP}:8443/?key=${encodeURIComponent(pwd)}&sse&all&cors`;
+    sseConnection = new EventSource(sseUrl);
+
+    sseConnection.onmessage = (event) => {
+        const data = event.data.trim();
+        if (data.includes('FREE') || data.includes('OPEN') || data.includes('RELAY_CONTACT_1 1')) {
+            updateStatusField('OFFEN', 'open');
+        } else if (data.includes('CLOSED') || data.includes('RELAY_CONTACT_1 0')) {
+            if (!autoTriggerInterval) updateStatusField('ZU', 'closed');
+        }
+    };
 }
 
-// --- UI & THEME ---
+// --- UI HELPER ---
 
-function updateStatus(key) {
-    if (!domCache.statusDisplay) return;
-    domCache.statusDisplay.textContent = messages[key] || key;
-    
-    // Farben für bessere Übersicht
-    domCache.statusDisplay.style.color = ''; // Reset
-    if (key === 'statusOpen') domCache.statusDisplay.style.color = '#28a745'; // Grün
-    if (key === 'statusClosed') domCache.statusDisplay.style.color = '#dc3545'; // Rot
+function updateStatusField(text, state) {
+    dom.statusField.textContent = `Relais: ${text}`;
+    dom.statusField.className = `status-badge ${state}`;
 }
 
-function loadPassword() {
-    const pwd = localStorage.getItem('behnke_pwd');
-    if (pwd) domCache.adminPwd.value = pwd;
+function showToast(msg, type = 'info') {
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    toast.textContent = msg;
+    dom.toastContainer.appendChild(toast);
+    
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        setTimeout(() => toast.remove(), 500);
+    }, 3000);
 }
 
 function initTheme() {
     const theme = localStorage.getItem('behnke_theme') || 'light';
-    applyTheme(theme);
-}
-
-function applyTheme(theme) {
     document.body.classList.toggle('dark-mode', theme === 'dark');
-    domCache.themeIcon.textContent = theme === 'dark' ? 'wb_sunny' : 'brightness_2';
-    localStorage.setItem('behnke_theme', theme);
 }
 
 function toggleTheme() {
-    const isDark = document.body.classList.contains('dark-mode');
-    applyTheme(isDark ? 'light' : 'dark');
+    const isDark = document.body.classList.toggle('dark-mode');
+    localStorage.setItem('behnke_theme', isDark ? 'dark' : 'light');
 }
