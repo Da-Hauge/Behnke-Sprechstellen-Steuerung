@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Behnke Sprechstellen Steuerung</title>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #f4f4f9; padding: 20px; }
+        .container { max-width: 500px; margin: 0 auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        h1 { font-size: 1.5rem; text-align: center; color: #333; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        select, input[type="password"], input[type="text"] { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        .btn-group { display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap; }
+        button { flex: 1; padding: 10px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; color: white; }
+        .btn-temp { background-color: #007bff; }
+        .btn-open { background-color: #28a745; }
+        .btn-close { background-color: #dc3545; }
+        button:hover { opacity: 0.9; }
+        .status-box { margin-top: 20px; padding: 15px; background: #e9ecef; border-radius: 4px; text-align: center; }
+        .status-indicator { font-weight: bold; color: #007bff; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Behnke Steuerung</h1>
+    
+    <div class="form-group">
+        <label for="ipSelect">Sprechstelle (IP-Adresse) auswählen:</label>
+        <select id="ipSelect" onchange="connectSSE()">
+            <option value="">-- Bitte wählen --</option>
+            <option value="192.168.104.191">Altbau neue Pforte (192.168.104.191)</option> <option value="192.168.104.192">Altbau neue Pforte (192.168.104.192)</option> <option value="192.168.104.193">Neubau Pforte (192.168.104.193)</option> </select>
+    </div>
+
+    <div class="form-group">
+        <label for="adminPwd">Administrator-Passwort:</label>
+        <input type="password" id="adminPwd" placeholder="Passwort eingeben" onchange="savePassword()">
+    </div>
+
+    <div class="status-box">
+        Aktueller Status (Relais 1): <br>
+        <span class="status-indicator" id="statusDisplay">Verbinde...</span>
+    </div>
+
+    <div class="btn-group">
+        <button class="btn-temp" onclick="sendCommand('cmd:free1')">Temporär Auf</button>
+        <button class="btn-open" onclick="sendCommand('cmd:open1')">Dauerhaft Auf</button>
+        <button class="btn-close" onclick="sendCommand('cmd:close1')">Dauerhaft Zu</button>
+    </div>
+</div>
+
+<script>
+    let sseSource = null;
+
+    // Lade gespeichertes Passwort beim Start
+    window.onload = function() {
+        const savedPwd = localStorage.getItem('behnke_pwd');
+        if (savedPwd) {
+            document.getElementById('adminPwd').value = savedPwd;
+        }
+    };
+
+    // Passwort lokal im Browser speichern
+    function savePassword() {
+        const pwd = document.getElementById('adminPwd').value;
+        localStorage.setItem('behnke_pwd', pwd);
+        connectSSE(); // Bei Passwortänderung SSE neu verbinden
+    }
+
+    // HTTP-API Befehl senden
+    function sendCommand(cmd) {
+        const ip = document.getElementById('ipSelect').value;
+        const pwd = document.getElementById('adminPwd').value;
+
+        if (!ip || !pwd) {
+            alert("Bitte IP-Adresse und Passwort angeben.");
+            return;
+        }
+
+        // URL Zusammenbau für API
+        const url = `https://${ip}/?key=${encodeURIComponent(pwd)}&api=${cmd}`;
+
+        fetch(url, { method: 'GET', mode: 'no-cors' })
+            .then(() => console.log(`Befehl ${cmd} gesendet.`))
+            .catch(err => console.error("Fehler beim Senden:", err));
+    }
+
+    // SSE API für den Status abonnieren
+    function connectSSE() {
+        const ip = document.getElementById('ipSelect').value;
+        const pwd = document.getElementById('adminPwd').value;
+        const statusDisplay = document.getElementById('statusDisplay');
+
+        if (sseSource) {
+            sseSource.close();
+            sseSource = null;
+        }
+
+        if (!ip || !pwd) {
+            statusDisplay.innerText = "Warte auf Eingabe...";
+            return;
+        }
+
+        statusDisplay.innerText = "Verbinde...";
+
+        // URL Zusammenbau für SSE (Port 8443 für HTTPS)
+        const sseUrl = `https://${ip}:8443/?key=${encodeURIComponent(pwd)}&sse&access_state_1&relay_contact_1`;
+
+        sseSource = new EventSource(sseUrl);
+
+        sseSource.onmessage = function(event) {
+            console.log("SSE Event:", event.data);
+            // Simples Parsing der Events (kann je nach genauer Ausgabe der Behnke-Station angepasst werden)
+            if (event.data.includes("access_state_1") || event.data.includes("relay_contact_1")) {
+                 statusDisplay.innerText = event.data;
+            } else if (event.data.includes("SSE_WELCOME")) {
+                 statusDisplay.innerText = "Verbunden. Warte auf Statusänderung...";
+            }
+        };
+
+        sseSource.onerror = function(err) {
+            console.error("SSE Fehler:", err);
+            statusDisplay.innerText = "Verbindungsfehler (SSL-Zertifikat oder falsches Passwort?)";
+            sseSource.close();
+        };
+    }
+</script>
+</body>
+</html>
