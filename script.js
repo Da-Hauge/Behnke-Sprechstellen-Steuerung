@@ -1,4 +1,4 @@
-// script.js - Optimized for Behnke Series 20 (German only)
+// script.js - Behnke Series 20 (Optimiert für CORS-Probleme)
 
 const API_ENDPOINT = '/';
 const SSE_ENDPOINT = ':8443/';
@@ -18,17 +18,16 @@ const STATUS_MAP = {
 
 const THEME_KEY = 'behnke_theme';
 
-// Status Messages
 const messages = {
     waiting: 'Warte auf Eingabe...',
     connecting: 'Verbinde...',
     connected: 'Verbunden',
     disconnected: 'Getrennt, verbinde neu...',
-    error: 'Verbindungsfehler',
+    error: 'Verbindung blockiert (CORS)',
     inputRequired: 'IP oder Passwort fehlt',
     commandSent: 'Befehl gesendet',
     apiError: 'API-Fehler',
-    readingFailed: 'Status-Lesen fehlgeschlagen',
+    readingFailed: 'Status via API blockiert - warte auf Live-Stream...',
     statusOpen: 'Status: Auf',
     statusClosed: 'Status: Zu'
 };
@@ -70,8 +69,10 @@ function handleConnectionUpdate() {
     if (pwd) localStorage.setItem('behnke_pwd', pwd);
     
     if (domCache.ipSelect.value && pwd) {
-        queryAccessState();
+        // Zuerst Stream starten, da dieser oft stabiler bzgl. CORS ist
         startSSE();
+        // Versuche dennoch die Abfrage mit dem cors-Parameter
+        queryAccessState();
     }
 }
 
@@ -91,18 +92,17 @@ async function sendCommand(commandString) {
         return;
     }
 
-    const url = `https://${ip}${API_ENDPOINT}?key=${encodeURIComponent(pwd)}&${commandString}`;
+    // Hinzufügen von &cors am Ende der URL
+    const url = `https://${ip}${API_ENDPOINT}?key=${encodeURIComponent(pwd)}&${commandString}&cors`;
 
     try {
-        const response = await fetch(url, { method: 'GET', mode: 'cors' });
-        if (response.ok) {
-            updateStatus('commandSent');
-            setTimeout(queryAccessState, 500); 
-        } else {
-            updateStatus('apiError');
-        }
+        // 'no-cors' ist hier oft nötig, wenn das Gerät keine Header sendet
+        await fetch(url, { mode: 'no-cors' });
+        updateStatus('commandSent');
+        // Nach Befehl kurz warten, dann Status prüfen
+        setTimeout(queryAccessState, 800); 
     } catch (error) {
-        console.error('API Error:', error);
+        console.error('API Send Error:', error);
         updateStatus('error');
     }
 }
@@ -112,17 +112,23 @@ async function queryAccessState() {
     const pwd = domCache.adminPwd.value.trim();
     if (!ip || !pwd) return;
 
-    const url = `https://${ip}${API_ENDPOINT}?key=${encodeURIComponent(pwd)}&${COMMANDS.GET_STATE}`;
+    // Auch hier &cors angehängt
+    const url = `https://${ip}${API_ENDPOINT}?key=${encodeURIComponent(pwd)}&${COMMANDS.GET_STATE}&cors`;
 
     try {
-        const response = await fetch(url, { method: 'GET', mode: 'cors' });
+        const response = await fetch(url);
         if (response.ok) {
             const text = await response.text();
             parseStateResponse(text);
+        } else {
+            updateStatus('readingFailed');
         }
     } catch (error) {
-        console.error('State Fetch Error:', error);
-        updateStatus('readingFailed');
+        // Wenn fetch wegen CORS scheitert, lassen wir den User wissen, dass wir auf SSE warten
+        console.warn('API Fetch blockiert (CORS). Warte auf SSE-Update.');
+        if (domCache.statusDisplay.textContent === messages.waiting) {
+             updateStatus('readingFailed');
+        }
     }
 }
 
@@ -142,30 +148,39 @@ function startSSE() {
     if (!ip || !pwd) return;
 
     updateStatus('connecting');
+    // WICHTIG: Port 8443 und &cors
     const sseUrl = `https://${ip}${SSE_ENDPOINT}?key=${encodeURIComponent(pwd)}&sse&all&cors`;
-    sseConnection = new EventSource(sseUrl);
+    
+    try {
+        sseConnection = new EventSource(sseUrl);
 
-    sseConnection.onopen = () => updateStatus('connected');
+        sseConnection.onopen = () => updateStatus('connected');
 
-    sseConnection.onmessage = (event) => {
-        const data = event.data.trim();
-        parseSSEData(data);
-        
-        if (/SSE_BYE/i.test(data)) {
-            sseConnection.close();
-            setTimeout(startSSE, 1000);
-        }
-    };
+        sseConnection.onmessage = (event) => {
+            const data = event.data.trim();
+            console.log("SSE Empfangen:", data); // Zum Debuggen in der Konsole
+            parseSSEData(data);
+            
+            if (/SSE_BYE/i.test(data)) {
+                sseConnection.close();
+                setTimeout(startSSE, 1000);
+            }
+        };
 
-    sseConnection.onerror = () => {
-        if (sseConnection.readyState === EventSource.CLOSED) {
-            updateStatus('disconnected');
-            setTimeout(startSSE, 2000);
-        }
-    };
+        sseConnection.onerror = () => {
+            if (sseConnection.readyState === EventSource.CLOSED) {
+                updateStatus('disconnected');
+                setTimeout(startSSE, 3000);
+            }
+        };
+    } catch (e) {
+        console.error("SSE Setup Error:", e);
+        updateStatus('error');
+    }
 }
 
 function parseSSEData(data) {
+    // Erkennt: ACCESS_STATE_1 FREE oder TEMP_ACCESS_STATE_1 OPEN etc.
     const stateMatch = data.match(/(?:TEMP_)?(?:ACCESS_STATE|RELAY_CONTACT)_1\s*[= ]\s*(FREE|CLOSED|OPEN)/i);
     if (stateMatch) {
         const state = stateMatch[1].toUpperCase();
@@ -173,13 +188,12 @@ function parseSSEData(data) {
     }
 }
 
-// --- UI & State Management ---
-
 function updateStatus(key) {
     if (!domCache.statusDisplay) return;
-    // Look up the predefined message or fallback to raw key if not found
     domCache.statusDisplay.textContent = messages[key] || key;
 }
+
+// --- UI Helpers ---
 
 function initTheme() {
     const theme = localStorage.getItem(THEME_KEY) || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
