@@ -1,7 +1,9 @@
+// script.js - Behnke Master-Steuerung (Pro-Station PW & Simulation)
+
 const STATIONS = {
-    "192.168.104.191": "Altbau neue Pforte (191)",
-    "192.168.104.192": "Altbau neue Pforte (192)",
-    "192.168.104.193": "Neubau Pforte (193)"
+    "192.168.104.191": "Altbau 191",
+    "192.168.104.192": "Altbau 192",
+    "192.168.104.193": "Neubau 193"
 };
 
 let currentIP = "";
@@ -10,7 +12,6 @@ let sseConnection = null;
 
 const dom = {
     switcher: document.getElementById('stationSwitcher'),
-    nameDisplay: document.getElementById('currentStationName'),
     content: document.getElementById('mainContent'),
     pwdInput: document.getElementById('stationPwd'),
     triggerBtn: document.getElementById('triggerBtn'),
@@ -37,24 +38,24 @@ function loadStation(ip) {
     if (sseConnection) sseConnection.close();
     
     currentIP = ip;
-    dom.nameDisplay.textContent = STATIONS[ip];
     dom.content.style.visibility = 'visible';
     
-    // Passwort-Logik (IP-spezifisch)
+    // Passwort laden (spezifisch für IP)
     const saved = localStorage.getItem(`behnke_pwd_${ip}`);
     dom.pwdInput.value = saved || "";
     
     dom.permanentToggle.checked = false;
-    updateSystemStatus(saved ? "Bereit" : "Passwort eingeben");
+    updateSystemStatus(saved ? "Bereit" : "Bitte Passwort eingeben");
     updateRelayStatus("Unbekannt");
     
-    showToast(`${STATIONS[ip]} geladen`);
+    showToast(`${STATIONS[ip]} ausgewählt`);
     if(saved) startSSE();
 }
 
 function savePassword() {
+    if(!currentIP) return;
     localStorage.setItem(`behnke_pwd_${currentIP}`, dom.pwdInput.value);
-    showToast("Passwort gespeichert", "success");
+    showToast("Passwort für diese IP gespeichert", "success");
     updateSystemStatus("Bereit");
     startSSE();
 }
@@ -63,7 +64,7 @@ async function runTrigger() {
     if (dom.triggerBtn.disabled) return;
     const ok = await apiCall('api=trigger&relay=1');
     if (ok) {
-        showToast("Öffne für 5 Sekunden", "success");
+        showToast("Tür öffnet (5s)", "success");
         visualizeCountdown();
     }
 }
@@ -74,7 +75,9 @@ function visualizeCountdown() {
     dom.triggerText.textContent = "Geöffnet...";
     dom.progressBar.style.width = "100%";
     
+    // Kleiner Delay damit CSS Transition greift
     setTimeout(() => dom.progressBar.style.width = "0%", 50);
+    
     setTimeout(() => {
         dom.triggerBtn.disabled = false;
         dom.triggerBtn.classList.remove('btn-active');
@@ -85,7 +88,7 @@ function visualizeCountdown() {
 function togglePermanent() {
     if (dom.permanentToggle.checked) {
         startAutoTrigger();
-        showToast("Daueröffnung aktiv", "warning");
+        showToast("Daueröffnung aktiviert", "warning");
     } else {
         stopAutoTrigger();
         showToast("Daueröffnung beendet");
@@ -95,24 +98,30 @@ function togglePermanent() {
 function startAutoTrigger() {
     apiCall('api=trigger&relay=1');
     autoTriggerInterval = setInterval(() => apiCall('api=trigger&relay=1'), 5000);
-    updateSystemStatus("Auto-Trigger läuft");
+    updateSystemStatus("Auto-Trigger aktiv");
 }
 
 function stopAutoTrigger() {
-    clearInterval(autoTriggerInterval);
-    autoTriggerInterval = null;
+    if(autoTriggerInterval) {
+        clearInterval(autoTriggerInterval);
+        autoTriggerInterval = null;
+    }
     updateSystemStatus("Bereit");
 }
 
 async function apiCall(cmd) {
     const pwd = dom.pwdInput.value;
-    if (!pwd) { showToast("Passwort fehlt!", "error"); return false; }
+    if (!pwd) { 
+        showToast("Passwort erforderlich!", "error"); 
+        updateSystemStatus("Passwort fehlt!");
+        return false; 
+    }
     
     try {
         await fetch(`https://${currentIP}/?key=${encodeURIComponent(pwd)}&${cmd}&cors`, { mode: 'no-cors' });
         return true;
     } catch (e) {
-        showToast("API Fehler", "error");
+        showToast("Verbindungsfehler", "error");
         return false;
     }
 }
@@ -133,7 +142,7 @@ function startSSE() {
             updateRelayStatus("Geschlossen");
         }
     };
-    sseConnection.onerror = () => updateSystemStatus("Verbindung verloren");
+    sseConnection.onerror = () => updateSystemStatus("Offline / CORS Error");
 }
 
 function updateSystemStatus(txt) { dom.systemStatus.textContent = txt; }
@@ -155,6 +164,7 @@ function rotateTheme() {
     const isDark = document.body.classList.toggle('dark-mode');
     localStorage.setItem('behnke_theme', isDark ? 'dark' : 'light');
 }
+
 function initTheme() {
     if (localStorage.getItem('behnke_theme') === 'dark') document.body.classList.add('dark-mode');
 }

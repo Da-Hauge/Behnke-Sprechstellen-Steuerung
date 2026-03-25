@@ -12,19 +12,20 @@
     <header class="main-header">
         <div class="header-left">
             <span class="material-icons info-icon">router</span>
-            <div>
-                <small>Aktive Sprechstelle</small>
-                <div id="currentStationName">Bitte wählen...</div>
+            <div class="station-selector-wrapper">
+                <small>Sprechstelle</small>
+                <select id="stationSwitcher" class="header-dropdown">
+                    <option value="" disabled selected>Bitte wählen...</option>
+                    <option value="192.168.104.191">Altbau 191</option> 
+                    <option value="192.168.104.192">Altbau 192</option> 
+                    <option value="192.168.104.193">Neubau 193</option> 
+                </select>
             </div>
         </div>
         <div class="header-right">
-            <select id="stationSwitcher">
-                <option value="" disabled selected>Station wählen</option>
-                <option value="192.168.104.191">Altbau 191</option> 
-                <option value="192.168.104.192">Altbau 192</option> 
-                <option value="192.168.104.193">Neubau 193</option> 
-            </select>
-            <button id="themeToggle" class="icon-btn"><span class="material-icons">brightness_medium</span></button>
+            <button id="themeToggle" class="icon-btn" aria-label="Theme wechseln">
+                <span class="material-icons">brightness_medium</span>
+            </button>
         </div>
     </header>
 
