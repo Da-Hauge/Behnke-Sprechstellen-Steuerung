@@ -116,7 +116,7 @@
         statusDisplay.innerText = "Verbinde...";
 
         let tried = false;
-        const sseUrl = `https://${ip}:8443/?key=${encodeURIComponent(pwd)}&sse&state`;
+        const sseUrl = `https://${ip}:8443/?key=${encodeURIComponent(pwd)}&sse&state&cors`;
         sseSource = new EventSource(sseUrl);
 
         sseSource.onopen = () => {
