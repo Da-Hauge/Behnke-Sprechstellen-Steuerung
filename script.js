@@ -128,34 +128,7 @@ function savePassword() {
  * Sendet API-Befehl asynchron (globale Funktion für index.html)
  * @param {string} action - Die Aktion ('temp_auf', 'dauer_auf', 'dauer_zu')
  */
-async function sendCommand(action) {
-    const ip = domCache.ipSelect?.value?.trim();
-    const pwd = domCache.adminPwd?.value?.trim();
-
-    if (!ip || !pwd) {
-        alert('IP und Passwort erforderlich');
-        return;
-    }
-
-    let command = '';
-    if (action === 'temp_auf') {
-        command = COMMANDS.TEMP_AUF;
-    } else if (action === 'dauer_auf' || action === 'dauer_zu') {
-        command = COMMANDS.HELP;
-    } else {
-        console.error('Unbekannte Aktion:', action);
-        return;
-    }
-
-    const url = `https://${ip}${API_ENDPOINT}?key=${encodeURIComponent(pwd)}&api=${command}`;
-
-    try {
-        await fetch(url, { method: 'GET', mode: 'no-cors' });
-        console.log(`Befehl gesendet: ${command}`);
-    } catch (error) {
-        console.error('API-Fehler:', error);
-    }
-}
+// sendCommand wird weiter unten als einzige Implementation definiert (mit Scheduled Access-State-Query)
 
 /**
  * Startet SSE-Verbindung (umbenannt von connectSSE für Kompatibilität)
@@ -200,13 +173,6 @@ function startSSE() {
             updateStatus('Verbindungsfehler');
         }
     };
-}
-
-/**
- * Alias für startSSE, um Kompatibilität mit index.html zu gewährleisten
- */
-function connectSSE() {
-    startSSE();
 }
 
 /**
@@ -273,39 +239,30 @@ function updateStatus(text) {
 document.addEventListener('DOMContentLoaded', initApp);
 
 /**
- * Bindet Event-Listener an Buttons
+ * Globale Funktion für index.html onChange + onClick
  */
-function bindEvents() {
-    domCache.savePwdBtn?.addEventListener('click', handleSavePassword);
-    domCache.tempAufBtn?.addEventListener('click', () => sendApiCommand(COMMANDS.TEMP_AUF));
-    domCache.dauerAufBtn?.addEventListener('click', () => sendApiCommand(COMMANDS.HELP));
-    domCache.dauerZuBtn?.addEventListener('click', () => sendApiCommand(COMMANDS.HELP));
-}
-
-/**
- * Speichert Passwort und startet SSE neu
- */
-function handleSavePassword() {
-    const pwd = domCache.adminPwd.value.trim();
-    if (!pwd) {
-        alert('Passwort erforderlich');
-        return;
-    }
-    localStorage.setItem('behnke_pwd', pwd);
+function connectSSE() {
     startSSE();
+    scheduleAccessStateQuery();
 }
 
 /**
- * Sendet API-Befehl asynchron
- * @param {string} command - Der API-Befehl
+ * Sendet UI-Befehle (Temporär Auf / Dauerhaft Auf / Dauerhaft Zu)
  */
-async function sendApiCommand(command) {
-    const ip = domCache.ipSelect.value.trim();
-    const pwd = domCache.adminPwd.value.trim();
+async function sendCommand(action) {
+    const ip = domCache.ipSelect?.value?.trim();
+    const pwd = domCache.adminPwd?.value?.trim();
 
     if (!ip || !pwd) {
         alert('IP und Passwort erforderlich');
         return;
+    }
+
+    let command;
+    if (action === 'temp_auf') {
+        command = COMMANDS.TEMP_AUF;
+    } else {
+        command = COMMANDS.HELP;
     }
 
     const url = `https://${ip}${API_ENDPOINT}?key=${encodeURIComponent(pwd)}&api=${command}`;
@@ -315,6 +272,8 @@ async function sendApiCommand(command) {
         console.log(`Befehl gesendet: ${command}`);
     } catch (error) {
         console.error('API-Fehler:', error);
+    } finally {
+        scheduleAccessStateQuery();
     }
 }
 
@@ -322,15 +281,14 @@ async function sendApiCommand(command) {
  * Startet SSE-Verbindung
  */
 function startSSE() {
-    const ip = domCache.ipSelect.value.trim();
-    const pwd = domCache.adminPwd.value.trim();
+    const ip = domCache.ipSelect?.value?.trim();
+    const pwd = domCache.adminPwd?.value?.trim();
 
     if (!ip || !pwd) {
         updateStatus('Eingabe erforderlich');
         return;
     }
 
-    // Schließe bestehende Verbindung
     if (sseConnection) {
         sseConnection.close();
     }
@@ -362,6 +320,7 @@ function startSSE() {
         }
     };
 }
+
 
 /**
  * Parst Status aus SSE-Daten
